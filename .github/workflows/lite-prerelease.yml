@@ -1,0 +1,63 @@
+name: Lite pre-release
+
+on:
+  push:
+    tags:
+      - "lite-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK tools (Ubuntu packages)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq android-sdk-platform-23 aapt dalvik-exchange apksigner zipalign zip
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/lite-v* ]]; then
+            name="${GITHUB_REF_NAME#lite-v}"
+          else
+            name="0.0.0-ci.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "code=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: Build APK
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+          GRADLE: ${{ github.workspace }}/gradlew
+        run: lite/build-apk.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unigis-lite-${{ steps.version.outputs.name }}
+          path: lite/build/apk/unigis-lite-*.apk
+
+      - name: Publish pre-release
+        if: startsWith(github.ref, 'refs/tags/lite-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          name: UniGIS Lite ${{ steps.version.outputs.name }}
+          files: lite/build/apk/unigis-lite-*.apk
+          body: |
+            Тестовый пре-релиз лайт-версии UniGIS (локальная карта помещения, этаж 1).
+
+            - Android 8.0+ (minSdk 26), подпись — отладочный ключ `lite/debug.keystore`.
+            - Устанавливается рядом с основной версией (`com.unigis.indoormap.lite`).
+            - Жесты: перемещение, масштаб и вращение двумя пальцами, двойной тап — приближение.

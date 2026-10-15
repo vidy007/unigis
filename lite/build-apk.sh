@@ -10,15 +10,18 @@ SDK=${ANDROID_SDK:-/usr/lib/android-sdk}
 export ANDROID_JAR=${ANDROID_JAR:-$SDK/platforms/android-23/android.jar}
 OUT=build/apk
 GRADLE=${GRADLE:-$(command -v gradle || echo ../gradlew)}
+VERSION_NAME=${VERSION_NAME:-0.1.0-dev}
+VERSION_CODE=${VERSION_CODE:-1}
+APK_NAME=unigis-lite-$VERSION_NAME.apk
 
 rm -rf "$OUT" build/gen
 mkdir -p "$OUT" build/gen
 
 echo "> aapt: resources + R.java"
-aapt package -f -m \
+aapt package -f -m --replace-version \
   -M AndroidManifest.xml -S res -I "$ANDROID_JAR" \
   -J build/gen -F "$OUT/unsigned.apk" \
-  --version-code 1 --version-name 0.1.0-lite
+  --version-code "$VERSION_CODE" --version-name "$VERSION_NAME"
 
 echo "> kotlinc (Gradle)"
 "$GRADLE" -q -p . jar copyRuntime
@@ -42,6 +45,6 @@ if [ ! -f debug.keystore ]; then
     -dname "CN=Android Debug,O=Android,C=US" >/dev/null
 fi
 apksigner sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android \
-  --out "$OUT/unigis-lite.apk" "$OUT/aligned.apk"
-apksigner verify "$OUT/unigis-lite.apk"
-echo "OK: $(pwd)/$OUT/unigis-lite.apk"
+  --out "$OUT/$APK_NAME" "$OUT/aligned.apk"
+apksigner verify "$OUT/$APK_NAME"
+echo "OK: $(pwd)/$OUT/$APK_NAME"

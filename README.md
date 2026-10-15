@@ -49,3 +49,10 @@ lite/build-apk.sh        # → lite/build/apk/unigis-lite.apk
 APK подписан отладочным ключом `lite/debug.keystore` (пароль `android`), он лежит в
 репозитории, чтобы обновления ставились поверх. Пакет `com.unigis.indoormap.lite`
 устанавливается рядом с основной версией.
+
+### Пре-релизы
+Workflow `.github/workflows/lite-prerelease.yml` собирает `lite/` на GitHub Actions.
+Пуш тега вида `lite-v0.1.0-pre.1` публикует GitHub pre-release с APK
+(versionName берётся из тега, versionCode — номер запуска). Запуск вручную
+(workflow_dispatch) только собирает APK и прикладывает его как артефакт.
+Локально версия задаётся через `VERSION_NAME=… VERSION_CODE=… lite/build-apk.sh`.
