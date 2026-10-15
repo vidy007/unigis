@@ -98,5 +98,10 @@ AGP и Google Maven. Логика (данные кампуса, поиск, ка
 sudo apt-get install android-sdk-platform-23 aapt dalvik-exchange apksigner zipalign zip
 ANDROID_NDK_HOME=/path/to/ndk lite/build-apk.sh   # → lite/build/apk/unigis-lite-*.apk
 ```
+На Windows то же самое делает `lite/build-apk.ps1` с инструментами Android SDK (aapt, d8, zipalign,
+apksigner из build-tools) и NDK, установленными через Android Studio:
+```
+powershell -ExecutionPolicy Bypass -File lite\build-apk.ps1
+```
 `ABIS="arm64-v8a"` ограничивает набор архитектур. Pre-release-сборки делает workflow
 `.github/workflows/lite-prerelease.yml` по тегу `lite-v*` (NDK на раннерах GitHub предустановлен).
