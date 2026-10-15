@@ -2,22 +2,17 @@ package com.unigis.indoormap.map
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import com.unigis.indoormap.core.Campus
+import com.unigis.indoormap.core.CampusCore
 import com.unigis.indoormap.core.FloorRef
+import com.unigis.indoormap.core.MapPoint
+import com.unigis.indoormap.core.MapRect
 
 /**
- * UI-side view of a floor decoded from the native campus model (app/src/main/cpp).
+ * Compose-side view of a floor from the shared core layer (shared/, backed by the C++ core).
+ * Only converts geometry to Compose types; the lite app has the same adapter for android.graphics.
  * All coordinates are in meters, origin at the top-left corner of the floor plan.
- * Floor data itself lives in assets/campus.json.
  */
-enum class RoomCategory(val title: String) {
-    // Order must match unigis::RoomCategory in campus.hpp: the ordinal crosses JNI.
-    OFFICE("Кабинет"),
-    MEETING("Переговорная"),
-    COMMON("Общая зона"),
-    SERVICE("Служебное"),
-    CORRIDOR("Коридор"),
-}
+typealias RoomCategory = com.unigis.indoormap.core.RoomCategory
 
 data class Room(
     val id: String,
@@ -42,10 +37,28 @@ data class FloorPlan(
     val doors: List<Door>,
     val entrance: Offset,
     val ref: FloorRef,
-    private val campus: Campus,
+    private val campus: CampusCore,
 ) {
-    fun roomAt(point: Offset): Room? = campus.roomAt(ref, point).takeIf { it >= 0 }?.let(rooms::get)
+    fun roomAt(point: Offset): Room? = campus.roomAt(ref, point.x, point.y).takeIf { it >= 0 }?.let(rooms::get)
 
     /** Rooms on this floor matching [query] by number or name, best match first. */
     fun search(query: String): List<Room> = campus.search(query, ref).map { rooms[it.room] }
+
+    companion object {
+        fun of(campus: CampusCore, ref: FloorRef): FloorPlan {
+            val floor = campus.floor(ref)
+            return FloorPlan(
+                name = floor.title,
+                bounds = floor.bounds.toRect(),
+                rooms = floor.rooms.map { Room(it.id, it.name, it.category, it.bounds.toRect(), it.area) },
+                doors = floor.doors.map { Door(it.start.toOffset(), it.end.toOffset(), it.exterior) },
+                entrance = floor.youAreHere.toOffset(),
+                ref = ref,
+                campus = campus,
+            )
+        }
+    }
 }
+
+private fun MapRect.toRect() = Rect(left, top, right, bottom)
+private fun MapPoint.toOffset() = Offset(x, y)

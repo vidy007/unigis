@@ -15,8 +15,9 @@ MIN_SDK=26
 CORE=../app/src/main/cpp
 OUT=build/apk
 GRADLE=${GRADLE:-$(command -v gradle || echo ../gradlew)}
-VERSION_NAME=${VERSION_NAME:-0.1.0-dev}
-VERSION_CODE=${VERSION_CODE:-1}
+# Same version as the main app unless CI overrides it.
+VERSION_NAME=${VERSION_NAME:-$(sed -n 's/^unigis\.versionName=//p' ../gradle.properties | tr -d '\r')}
+VERSION_CODE=${VERSION_CODE:-$(sed -n 's/^unigis\.versionCode=//p' ../gradle.properties | tr -d '\r')}
 APK_NAME=unigis-lite-$VERSION_NAME.apk
 
 if [ -z "$NDK" ] || [ ! -d "$NDK/toolchains/llvm/prebuilt" ]; then

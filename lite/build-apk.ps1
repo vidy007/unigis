@@ -25,8 +25,11 @@ $targets = @{ 'arm64-v8a' = 'aarch64-linux-android'; 'armeabi-v7a' = 'armv7a-lin
 $minSdk = 26
 $core = '..\app\src\main\cpp'
 $out = 'build\apk'
-$versionName = if ($env:VERSION_NAME) { $env:VERSION_NAME } else { '0.1.0-dev' }
-$versionCode = if ($env:VERSION_CODE) { $env:VERSION_CODE } else { '1' }
+# Same version as the main app unless overridden.
+$props = Get-Content ..\gradle.properties
+function Prop($key) { ($props | Where-Object { $_ -like "$key=*" } | Select-Object -First 1) -replace "^$([regex]::Escape($key))=", '' }
+$versionName = if ($env:VERSION_NAME) { $env:VERSION_NAME } else { Prop 'unigis.versionName' }
+$versionCode = if ($env:VERSION_CODE) { $env:VERSION_CODE } else { Prop 'unigis.versionCode' }
 $apkName = "unigis-lite-$versionName.apk"
 
 Remove-Item -Recurse -Force $out, 'build\gen', 'build\native', 'build\dex' -ErrorAction SilentlyContinue

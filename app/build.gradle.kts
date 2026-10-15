@@ -13,8 +13,8 @@ android {
         applicationId = "com.unigis.indoormap"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = providers.gradleProperty("unigis.versionCode").get().toInt()
+        versionName = providers.gradleProperty("unigis.versionName").get()
 
         externalNativeBuild {
             cmake {
@@ -35,6 +35,12 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    sourceSets {
+        // UI-independent Kotlin layer shared with the lite app.
+        getByName("main") {
+            kotlin.directories += "../shared/src/main/kotlin"
+        }
     }
     externalNativeBuild {
         cmake {

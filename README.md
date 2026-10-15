@@ -2,10 +2,20 @@
 
 Приложение для навигации внутри корпусов университета и между ними. Работает полностью
 офлайн: данные кампуса лежат в APK (`app/src/main/assets/campus.json`), вся логика выполняется
-в нативном C++-ядре. Jetpack Compose отвечает только за интерфейс и отрисовку.
+в нативном C++-ядре. Приложение собирается в двух вариантах с одной логикой, данными и версией:
+
+| | `app/` | `lite/` |
+|---|---|---|
+| Интерфейс | Jetpack Compose, Material 3 | Android View + Canvas, оформление под Material 3 |
+| Логика | C++-ядро + `shared/` | то же C++-ядро + тот же `shared/` |
+| Сборка | Gradle + AGP (Google Maven), CMake | Gradle (только Kotlin с Maven Central), `clang++` из NDK, aapt/dx (или d8) |
+| Пакет | `com.unigis.indoormap` | `com.unigis.indoormap.lite` (ставится рядом) |
 
 ## Архитектура
 ```
+shared/src/main/kotlin/com/unigis/indoormap/core/   — общий для app и lite слой без UI (Kotlin + Android framework)
+├── NativeCore.kt                — external-функции JNI
+└── CampusCore.kt                — загрузка campus.json, декодирование данных ядра, поиск, маршруты
 app/src/main/
 ├── cpp/                         — C++20 ядро (NDK), без внешних зависимостей
 │   ├── include/unigis/
@@ -19,14 +29,19 @@ app/src/main/
 │   ├── jni/jni_bridge.cpp       — JNI: данные передаются плоскими массивами
 │   └── tests/core_test.cpp      — тесты ядра
 ├── java/com/unigis/indoormap/
-│   ├── core/NativeCore.kt       — external-функции
-│   ├── core/Campus.kt           — декодирование нативных данных в UI-модели, маршруты
-│   ├── map/FloorPlan.kt         — UI-модели (Room, Door, FloorPlan)
+│   ├── map/FloorPlan.kt         — адаптер shared → типы Compose (Room, Door, FloorPlan)
 │   ├── map/MapState.kt          — состояние камеры для Compose (математика в C++)
 │   ├── map/FloorMap.kt          — отрисовка (Compose Canvas)
 │   └── ui/                      — экран, тема (Material 3)
 └── assets/campus.json           — данные кампуса (генерируется, см. ниже)
+lite/src/main/kotlin/com/unigis/indoormap/lite/
+├── FloorPlan.kt                 — адаптер shared → android.graphics (зеркало app/.../map/FloorPlan.kt)
+├── FloorMapView.kt              — отрисовка и жесты (математика камеры в C++)
+└── MainActivity.kt              — те же экраны, что ui/MapScreen.kt, на обычных View
 ```
+Версия (`unigis.versionName`/`unigis.versionCode`) задаётся в `gradle.properties`, версия Kotlin — в
+`gradle/libs.versions.toml`; оба варианта берут их оттуда. Новая функция добавляется в C++-ядро и
+`shared/`, а в интерфейс — в обоих вариантах.
 
 ## Данные кампуса
 - **Контуры зданий, этажность, входы, дорожки** взяты из OpenStreetMap
@@ -87,11 +102,10 @@ NDK и CMake Gradle скачивает сам при первой сборке.
 в `org.gradle.jvmargs` в `~/.gradle/gradle.properties`.
 
 ## Вариант без зависимостей (`lite/`)
-`lite/` — тот же интерфейс на чистом Android framework (View + Canvas), без AndroidX, Compose,
-AGP и Google Maven. Логика (данные кампуса, поиск, камера, маршруты) берётся из того же C++-ядра
-`app/src/main/cpp` через тот же JNI-мост (`NativeCore.kt` подключается из `app/`). Ядро собирается
-одной командой `clang++` из NDK, без CMake; libc++ линкуется статически, так что в APK одна
-`libunigis.so` на ABI.
+`lite/` — то же приложение с минимумом зависимостей: без AndroidX, Compose, AGP и Google Maven.
+Отличается только интерфейс (View + Canvas вместо Compose); C++-ядро, слой `shared/`, данные и версия
+общие. Ядро собирается одной командой `clang++` из NDK, без CMake; libc++ линкуется статически,
+так что в APK одна `libunigis.so` на ABI.
 
 Нужны пакеты Debian/Ubuntu, Gradle (Kotlin с Maven Central), JDK 17+ и Android NDK:
 ```

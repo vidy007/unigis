@@ -26,11 +26,13 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.unigis.indoormap.core.CampusCore
 
 /**
- * Dependency-free variant of the indoor map: plain framework Views styled after
- * Material 3, so it can be built without Google Maven (AndroidX / Compose).
- * Map logic comes from the same C++ core as the main app (see FloorPlan.kt).
+ * Lite build of the UniGIS app: the same app (same C++ core, shared Kotlin layer in shared/,
+ * same data and screens) with the Compose UI re-done in plain framework Views styled after
+ * Material 3, so it builds without Google Maven (AndroidX / Compose / AGP).
+ * Keep it in step with app/.../ui/MapScreen.kt when the app's screens change.
  */
 class MainActivity : Activity() {
 
@@ -49,7 +51,8 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        plan = Campus.get(this).defaultFloorPlan()
+        val campus = CampusCore.get(this)
+        plan = FloorPlan.of(campus, campus.defaultFloor())
         p = Palette.from(this)
         setupWindow()
 
