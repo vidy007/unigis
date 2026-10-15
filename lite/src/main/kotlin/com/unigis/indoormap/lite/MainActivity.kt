@@ -30,10 +30,11 @@ import android.widget.TextView
 /**
  * Dependency-free variant of the indoor map: plain framework Views styled after
  * Material 3, so it can be built without Google Maven (AndroidX / Compose).
+ * Map logic comes from the same C++ core as the main app (see FloorPlan.kt).
  */
 class MainActivity : Activity() {
 
-    private val plan = DemoFloorPlan
+    private lateinit var plan: FloorPlan
     private lateinit var p: Palette
     private lateinit var map: FloorMapView
     private lateinit var compass: ImageButton
@@ -48,6 +49,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        plan = Campus.get(this).defaultFloorPlan()
         p = Palette.from(this)
         setupWindow()
 
@@ -246,9 +248,7 @@ class MainActivity : Activity() {
 
     private fun fillResults(query: String) {
         resultList.removeAllViews()
-        plan.rooms
-            .filter { it.category != RoomCategory.CORRIDOR }
-            .filter { it.name.contains(query, ignoreCase = true) || it.id.contains(query, ignoreCase = true) }
+        plan.search(query)
             .forEach { room -> resultList.addView(resultRow(room), LinearLayout.LayoutParams(MATCH_PARENT, dp(72))) }
     }
 

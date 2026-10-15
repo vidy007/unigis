@@ -18,7 +18,8 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          # Gradle 9.8 (root wrapper) needs at least JDK 17; 21 is the current LTS.
+          java-version: "21"
 
       - name: Install Android SDK tools (Ubuntu packages)
         run: |
@@ -36,6 +37,8 @@ jobs:
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "code=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
+      # The C++ core is compiled with the NDK preinstalled on GitHub's Ubuntu runners
+      # ($ANDROID_NDK_LATEST_HOME); only its clang is used.
       - name: Build APK
         env:
           VERSION_NAME: ${{ steps.version.outputs.name }}
@@ -56,7 +59,7 @@ jobs:
           name: UniGIS Lite ${{ steps.version.outputs.name }}
           files: lite/build/apk/unigis-lite-*.apk
           body: |
-            Тестовый пре-релиз лайт-версии UniGIS (локальная карта помещения, этаж 1).
+            Тестовый пре-релиз лайт-версии UniGIS: интерфейс на Android View, логика карты в общем C++-ядре, данные кампуса офлайн.
 
             - Android 8.0+ (minSdk 26), подпись — отладочный ключ `lite/debug.keystore`.
             - Устанавливается рядом с основной версией (`com.unigis.indoormap.lite`).

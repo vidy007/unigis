@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Sample floor for tools/svg_floor_to_json.py: 1 unit = 0.1 m (see the scale line). -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+     width="880" height="520" viewBox="0 0 220 130">
+  <rect id="bounds" x="0" y="0" width="220" height="130" fill="#fafafa"/>
+  <!-- Not a room: no data-category / data-name / label. -->
+  <rect id="outer-wall" x="18" y="18" width="184" height="94" fill="none" stroke="#444" stroke-width="2"/>
+  <rect id="hidden-draft" x="0" y="0" width="10" height="10" data-category="office" style="display:none"/>
+
+  <g id="rooms" transform="translate(20,20)" stroke="#666" stroke-width="0.5">
+    <rect id="101" data-name="Кабинет 101" data-category="office" x="0" y="0" width="60" height="60" fill="#e3f2fd"/>
+    <rect id="r102" data-id="102" data-name="Переговорная" data-category="meeting" x="60" y="0" width="60" height="60" fill="#ede7f6"/>
+    <path id="r103" data-id="103" inkscape:label="Санузел" data-category="service" d="M 120,0 H 180 V 60 h -30 L 120,30 Z" fill="#eceff1"/>
+    <g id="corridor" transform="scale(2)">
+      <rect id="corridor-room" data-id="corridor" data-name="Коридор" x="0" y="30" width="90" height="15" fill="#fff8e1"/>
+    </g>
+  </g>
+
+  <g id="doors" stroke="#c62828" stroke-width="1.5">
+    <line class="door" x1="45" y1="80" x2="55" y2="80"/>
+    <line data-exterior="true" x1="20" y1="90" x2="20" y2="105"/>
+  </g>
+
+  <circle data-connector="stairs" data-group="stairs-A" cx="185" cy="95" r="4" fill="#2e7d32"/>
+  <circle id="you-are-here" cx="30" cy="95" r="2" fill="#1565c0"/>
+  <line id="scale" data-meters="10" x1="0" y1="125" x2="100" y2="125" stroke="#000" stroke-width="1"/>
+</svg>

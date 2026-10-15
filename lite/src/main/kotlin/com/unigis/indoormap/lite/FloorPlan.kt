@@ -1,10 +1,16 @@
 package com.unigis.indoormap.lite
 
+import android.content.Context
 import android.graphics.PointF
 import android.graphics.RectF
+import com.unigis.indoormap.core.NativeCore
 
-/** All coordinates are in meters, origin at the top-left corner of the building. */
+/**
+ * UI-side view of a floor decoded from the shared C++ core (app/src/main/cpp), which owns the
+ * campus data (assets/campus.json), hit testing and search. Coordinates are in meters.
+ */
 enum class RoomCategory(val title: String) {
+    // Order must match unigis::RoomCategory in campus.hpp: the ordinal crosses JNI.
     OFFICE("Кабинет"),
     MEETING("Переговорная"),
     COMMON("Общая зона"),
@@ -12,9 +18,8 @@ enum class RoomCategory(val title: String) {
     CORRIDOR("Коридор"),
 }
 
-class Room(val id: String, val name: String, val category: RoomCategory, val bounds: RectF) {
-    val area: Float get() = bounds.width() * bounds.height()
-}
+/** [area] is in square meters, computed natively from the room polygon. */
+class Room(val id: String, val name: String, val category: RoomCategory, val bounds: RectF, val area: Float)
 
 /** A door is an opening in a wall between [start] and [end]. */
 class Door(val start: PointF, val end: PointF, val exterior: Boolean = false)
@@ -25,48 +30,67 @@ class FloorPlan(
     val rooms: List<Room>,
     val doors: List<Door>,
     val entrance: PointF,
+    private val campus: Campus,
+    private val building: Int,
+    private val floor: Int,
 ) {
     fun roomAt(x: Float, y: Float): Room? =
-        rooms.lastOrNull { it.category != RoomCategory.CORRIDOR && it.bounds.contains(x, y) }
-            ?: rooms.lastOrNull { it.bounds.contains(x, y) }
+        NativeCore.roomAt(campus.handle, building, floor, x, y).takeIf { it >= 0 }?.let(rooms::get)
+
+    /** Rooms on this floor matching [query] by number or name, best match first. */
+    fun search(query: String): List<Room> {
+        val hits = NativeCore.searchRooms(campus.handle, query, building, floor)
+        return List(hits.size / 3) { rooms[hits[3 * it + 2]] }
+    }
 }
 
-private fun rect(l: Float, t: Float, r: Float, b: Float) = RectF(l, t, r, b)
-private fun door(x1: Float, y1: Float, x2: Float, y2: Float, exterior: Boolean = false) =
-    Door(PointF(x1, y1), PointF(x2, y2), exterior)
+/** Process-wide native campus; its memory is intentionally never released. */
+class Campus private constructor(val handle: Long) {
 
-/** Demo single-storey office building, 32 × 20 m. Same layout as the Compose app. */
-val DemoFloorPlan = FloorPlan(
-    name = "Этаж 1",
-    bounds = rect(0f, 0f, 32f, 20f),
-    rooms = listOf(
-        Room("101", "Кабинет 101", RoomCategory.OFFICE, rect(0f, 0f, 6f, 8f)),
-        Room("102", "Кабинет 102", RoomCategory.OFFICE, rect(6f, 0f, 12f, 8f)),
-        Room("103", "Опенспейс", RoomCategory.OFFICE, rect(12f, 0f, 22f, 8f)),
-        Room("104", "Переговорная", RoomCategory.MEETING, rect(22f, 0f, 28f, 8f)),
-        Room("105", "Серверная", RoomCategory.SERVICE, rect(28f, 0f, 32f, 8f)),
-        Room("corridor", "Коридор", RoomCategory.CORRIDOR, rect(0f, 8f, 32f, 11f)),
-        Room("lobby", "Холл", RoomCategory.COMMON, rect(0f, 11f, 8f, 20f)),
-        Room("110", "Ресепшн", RoomCategory.COMMON, rect(8f, 11f, 13f, 20f)),
-        Room("111", "Кухня", RoomCategory.COMMON, rect(13f, 11f, 19f, 20f)),
-        Room("wc", "Санузел", RoomCategory.SERVICE, rect(19f, 11f, 22f, 20f)),
-        Room("stairs", "Лестница", RoomCategory.SERVICE, rect(22f, 11f, 26f, 20f)),
-        Room("112", "Склад", RoomCategory.SERVICE, rect(26f, 11f, 32f, 20f)),
-    ),
-    doors = listOf(
-        door(2f, 8f, 3f, 8f),
-        door(8.5f, 8f, 9.5f, 8f),
-        door(16f, 8f, 18f, 8f),
-        door(24.5f, 8f, 25.5f, 8f),
-        door(29.5f, 8f, 30.5f, 8f),
-        door(2f, 11f, 6f, 11f),
-        door(10f, 11f, 11f, 11f),
-        door(15f, 11f, 17f, 11f),
-        door(20f, 11f, 21f, 11f),
-        door(23f, 11f, 25f, 11f),
-        door(28.5f, 11f, 29.5f, 11f),
-        door(8f, 15f, 8f, 17f),
-        door(3f, 20f, 5f, 20f, exterior = true),
-    ),
-    entrance = PointF(4f, 18.8f),
-)
+    /** First floor of the first building that has floor plans. */
+    fun defaultFloorPlan(): FloorPlan {
+        for (b in 0 until NativeCore.buildingCount(handle)) {
+            // [levels, placeholder, floor levels...]
+            if (NativeCore.buildingLevels(handle, b).size > 2) return floorPlan(b, 0)
+        }
+        error("campus.json has no floor plans")
+    }
+
+    fun floorPlan(building: Int, floor: Int): FloorPlan {
+        // Packed layouts are documented in app/src/main/cpp/jni/jni_bridge.cpp.
+        val strings = requireNotNull(NativeCore.floorStrings(handle, building, floor))
+        val g = requireNotNull(NativeCore.floorGeometry(handle, building, floor))
+        var i = 0
+        fun next() = g[i++]
+        val bounds = RectF(next(), next(), next(), next())
+        val youAreHere = PointF(next(), next())
+        val rooms = List(next().toInt()) { r ->
+            val category = RoomCategory.values()[next().toInt()]
+            val roomBounds = RectF(next(), next(), next(), next())
+            val area = next()
+            i += 2 // anchor, used natively for routing
+            Room(strings[1 + 2 * r], strings[2 + 2 * r], category, roomBounds, area)
+        }
+        val doors = List(next().toInt()) {
+            val start = PointF(next(), next())
+            val end = PointF(next(), next())
+            Door(start, end, exterior = next() != 0f)
+        }
+        val shortName = NativeCore.buildingStrings(handle, building)[2]
+        return FloorPlan("$shortName · ${strings[0]}", bounds, rooms, doors, youAreHere, this, building, floor)
+    }
+
+    companion object {
+        @Volatile
+        private var instance: Campus? = null
+
+        fun get(context: Context): Campus =
+            instance ?: synchronized(this) {
+                instance ?: run {
+                    val json = context.applicationContext.assets.open("campus.json")
+                        .bufferedReader(Charsets.UTF_8).use { it.readText() }
+                    Campus(NativeCore.loadCampus(json)).also { instance = it }
+                }
+            }
+    }
+}

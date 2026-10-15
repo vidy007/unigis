@@ -1,0 +1,92 @@
+#include "unigis/camera.hpp"
+
+#include <algorithm>
+#include <cmath>
+
+namespace unigis {
+
+void Camera::init(float* state, const Rect& plan) {
+    std::fill(state, state + cam::Count, 0.f);
+    state[cam::Scale] = 1.f;
+    state[cam::FitScale] = 1.f;
+    state[cam::PlanL] = plan.left;
+    state[cam::PlanT] = plan.top;
+    state[cam::PlanR] = plan.right;
+    state[cam::PlanB] = plan.bottom;
+}
+
+float Camera::computeFitScale(const Rect& bounds) const {
+    const float w = s_[cam::ViewportW];
+    const float h = s_[cam::ViewportH];
+    if (w <= 0.f || h <= 0.f || bounds.empty()) return 1.f;
+    return std::min(w / bounds.width(), h / bounds.height()) * 0.9f;
+}
+
+void Camera::setCamera(Vec2 centerWorld, float scale, float rotation) {
+    s_[cam::Scale] = scale;
+    s_[cam::Rotation] = rotation;
+    const Vec2 offset = viewportCenter() - (centerWorld * scale).rotated(rotation);
+    s_[cam::OffsetX] = offset.x;
+    s_[cam::OffsetY] = offset.y;
+}
+
+void Camera::onViewportChanged(float width, float height) {
+    const bool first = s_[cam::ViewportW] == 0.f && s_[cam::ViewportH] == 0.f;
+    s_[cam::ViewportW] = width;
+    s_[cam::ViewportH] = height;
+    s_[cam::FitScale] = computeFitScale(plan());
+    if (first) fitToScreen();
+    else setCamera(plan().center(), scale(), rotation());
+}
+
+void Camera::onGesture(Vec2 centroid, Vec2 pan, float zoom, float rotationDelta) {
+    const float newScale = std::clamp(scale() * zoom, minScale(), maxScale());
+    const float dz = newScale / scale();
+    const Vec2 offset = centroid + pan - (centroid - this->offset()).rotated(rotationDelta) * dz;
+    s_[cam::OffsetX] = offset.x;
+    s_[cam::OffsetY] = offset.y;
+    s_[cam::Scale] = newScale;
+    s_[cam::Rotation] = normalizeDegrees(rotation() + rotationDelta);
+}
+
+void Camera::fitToScreen() { setCamera(plan().center(), s_[cam::FitScale], 0.f); }
+
+void Camera::prepare(Vec2 targetCenter, float targetScale, float targetRotation) {
+    const Vec2 start = toWorld(viewportCenter());
+    s_[cam::AnimStartX] = start.x;
+    s_[cam::AnimStartY] = start.y;
+    s_[cam::AnimStartScaleLog] = std::log(scale());
+    s_[cam::AnimEndScaleLog] = std::log(targetScale);
+    s_[cam::AnimStartRotation] = rotation();
+    s_[cam::AnimRotationDelta] = normalizeDegrees(targetRotation - rotation());
+    s_[cam::AnimTargetX] = targetCenter.x;
+    s_[cam::AnimTargetY] = targetCenter.y;
+}
+
+void Camera::step(float t) {
+    const Vec2 start{s_[cam::AnimStartX], s_[cam::AnimStartY]};
+    const Vec2 target{s_[cam::AnimTargetX], s_[cam::AnimTargetY]};
+    // Scale is interpolated in log space so zooming feels uniform.
+    const float logScale = s_[cam::AnimStartScaleLog] + (s_[cam::AnimEndScaleLog] - s_[cam::AnimStartScaleLog]) * t;
+    setCamera(start + (target - start) * t, std::exp(logScale),
+              normalizeDegrees(s_[cam::AnimStartRotation] + s_[cam::AnimRotationDelta] * t));
+}
+
+void Camera::prepareFit() { prepare(plan().center(), s_[cam::FitScale], 0.f); }
+
+void Camera::prepareResetRotation() { prepare(toWorld(viewportCenter()), scale(), 0.f); }
+
+void Camera::prepareZoom(float factor, Vec2 pivot) {
+    const float target = std::clamp(scale() * factor, minScale(), maxScale());
+    // Keep the world point under the pivot fixed while zooming.
+    const Vec2 pivotWorld = toWorld(pivot);
+    const Vec2 centerWorld = toWorld(viewportCenter());
+    prepare(pivotWorld + (centerWorld - pivotWorld) * (scale() / target), target, rotation());
+}
+
+void Camera::prepareFocus(const Rect& target) {
+    const float fit = std::min(std::max(scale(), computeFitScale(target.inflated(3.f))), maxScale());
+    prepare(target.center(), fit, rotation());
+}
+
+}  // namespace unigis

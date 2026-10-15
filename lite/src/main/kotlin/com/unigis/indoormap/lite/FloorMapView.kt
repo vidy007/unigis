@@ -6,24 +6,21 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PointF
-import android.graphics.RectF
 import android.graphics.Typeface
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.view.animation.PathInterpolator
+import com.unigis.indoormap.core.NativeCore
 import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.exp
 import kotlin.math.hypot
-import kotlin.math.ln
 import kotlin.math.min
-import kotlin.math.sin
 
 private const val WALL_WIDTH = 0.12f
 private const val OUTER_WALL_WIDTH = 0.3f
 
-private fun normalizeDegrees(d: Float): Float {
+/** Wraps an angle delta between touch events into [-180, 180]; plain touch bookkeeping. */
+private fun wrapDegrees(d: Float): Float {
     var r = d % 360f
     if (r > 180f) r -= 360f
     if (r < -180f) r += 360f
@@ -33,6 +30,7 @@ private fun normalizeDegrees(d: Float): Float {
 /**
  * Renders a [FloorPlan] and lets the user pan, pinch-zoom and two-finger-rotate it.
  *
+ * Camera math lives in the shared C++ core (unigis::Camera); this view owns its packed state.
  * A world point `w` (meters) maps to the screen as `offset + rotate(w * scale, rotation)`.
  */
 class FloorMapView(context: Context, private val plan: FloorPlan) : View(context) {
@@ -46,16 +44,16 @@ class FloorMapView(context: Context, private val plan: FloorPlan) : View(context
     var onRoomClick: (Room?) -> Unit = {}
     var onCameraChanged: () -> Unit = {}
 
-    var scale = 1f
-        private set
-    var rotationDeg = 0f
-        private set
-    private var offX = 0f
-    private var offY = 0f
+    private val camera = FloatArray(NativeCore.cameraStateSize()).also {
+        with(plan.bounds) { NativeCore.cameraInit(it, left, top, right, bottom) }
+    }
+    private val point = FloatArray(2)
 
-    private var fitScale = 1f
-    private val minScale get() = fitScale * 0.5f
-    private val maxScale get() = fitScale * 12f
+    val scale get() = camera[NativeCore.CAMERA_SCALE]
+    val rotationDeg get() = camera[NativeCore.CAMERA_ROTATION]
+    private val offX get() = camera[NativeCore.CAMERA_OFFSET_X]
+    private val offY get() = camera[NativeCore.CAMERA_OFFSET_Y]
+
     private var animator: ValueAnimator? = null
 
     private val density = resources.displayMetrics.density
@@ -69,96 +67,52 @@ class FloorMapView(context: Context, private val plan: FloorPlan) : View(context
 
     // ---- Coordinate transforms ----
 
-    private fun rot(x: Float, y: Float, degrees: Float): PointF {
-        val rad = Math.toRadians(degrees.toDouble())
-        val c = cos(rad).toFloat()
-        val s = sin(rad).toFloat()
-        return PointF(x * c - y * s, x * s + y * c)
-    }
-
     fun toScreen(wx: Float, wy: Float): PointF {
-        val p = rot(wx * scale, wy * scale, rotationDeg)
-        return PointF(offX + p.x, offY + p.y)
+        NativeCore.cameraToScreen(camera, wx, wy, point)
+        return PointF(point[0], point[1])
     }
 
     fun toWorld(sx: Float, sy: Float): PointF {
-        val p = rot(sx - offX, sy - offY, -rotationDeg)
-        return PointF(p.x / scale, p.y / scale)
+        NativeCore.cameraToWorld(camera, sx, sy, point)
+        return PointF(point[0], point[1])
     }
 
-    private val centerX get() = width / 2f
-    private val centerY get() = height / 2f
-
-    private fun computeFitScale(bounds: RectF): Float {
-        if (width == 0 || height == 0) return 1f
-        return min(width / bounds.width(), height / bounds.height()) * 0.9f
-    }
-
-    /** Places the world point ([cx], [cy]) in the middle of the view. */
-    private fun setCamera(cx: Float, cy: Float, newScale: Float, newRotation: Float) {
-        scale = newScale
-        rotationDeg = newRotation
-        val p = rot(cx * newScale, cy * newScale, newRotation)
-        offX = centerX - p.x
-        offY = centerY - p.y
+    private fun cameraChanged() {
         invalidate()
         onCameraChanged()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        val oldCenter = if (oldw > 0) toWorld(oldw / 2f, oldh / 2f) else null
-        fitScale = computeFitScale(plan.bounds)
-        if (oldCenter == null) {
-            setCamera(plan.bounds.centerX(), plan.bounds.centerY(), fitScale, 0f)
-        } else {
-            setCamera(oldCenter.x, oldCenter.y, scale, rotationDeg)
-        }
+        NativeCore.cameraViewport(camera, w.toFloat(), h.toFloat())
+        cameraChanged()
     }
 
     // ---- Animated camera moves ----
 
-    private fun animateCamera(tx: Float, ty: Float, targetScale: Float, targetRotation: Float) {
+    /** Native code computes the start/target poses; the animator only drives eased progress. */
+    private fun animateCamera(prepare: () -> Unit) {
         animator?.cancel()
-        val start = toWorld(centerX, centerY)
-        val s0 = ln(scale)
-        val s1 = ln(targetScale)
-        val r0 = rotationDeg
-        val dr = normalizeDegrees(targetRotation - r0)
+        prepare()
         animator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 450
             interpolator = PathInterpolator(0.2f, 0f, 0f, 1f) // M3 emphasized-ish
             addUpdateListener {
-                val t = it.animatedValue as Float
-                setCamera(
-                    start.x + (tx - start.x) * t,
-                    start.y + (ty - start.y) * t,
-                    exp(s0 + (s1 - s0) * t),
-                    normalizeDegrees(r0 + dr * t),
-                )
+                NativeCore.cameraStep(camera, it.animatedValue as Float)
+                cameraChanged()
             }
             start()
         }
     }
 
-    fun animateFit() = animateCamera(plan.bounds.centerX(), plan.bounds.centerY(), fitScale, 0f)
+    fun animateFit() = animateCamera { NativeCore.cameraPrepareFit(camera) }
 
-    fun animateResetRotation() {
-        val c = toWorld(centerX, centerY)
-        animateCamera(c.x, c.y, scale, 0f)
-    }
+    fun animateResetRotation() = animateCamera { NativeCore.cameraPrepareResetRotation(camera) }
 
-    fun animateZoom(factor: Float, px: Float = centerX, py: Float = centerY) {
-        val target = (scale * factor).coerceIn(minScale, maxScale)
-        val pivot = toWorld(px, py)
-        val center = toWorld(centerX, centerY)
-        val k = scale / target
-        animateCamera(pivot.x + (center.x - pivot.x) * k, pivot.y + (center.y - pivot.y) * k, target, rotationDeg)
-    }
+    fun animateZoom(factor: Float, px: Float = Float.NaN, py: Float = Float.NaN) =
+        animateCamera { NativeCore.cameraPrepareZoom(camera, factor, px, py) }
 
-    fun animateFocus(room: Room) {
-        val r = RectF(room.bounds).apply { inset(-3f, -3f) }
-        val target = maxOf(scale, computeFitScale(r)).coerceAtMost(maxScale)
-        animateCamera(room.bounds.centerX(), room.bounds.centerY(), target, rotationDeg)
+    fun animateFocus(room: Room) = animateCamera {
+        with(room.bounds) { NativeCore.cameraPrepareFocus(camera, left, top, right, bottom) }
     }
 
     // ---- Gestures ----
@@ -185,15 +139,8 @@ class FloorMapView(context: Context, private val plan: FloorPlan) : View(context
     private var lastCount = 0
 
     private fun applyGesture(cx: Float, cy: Float, panX: Float, panY: Float, zoom: Float, rotDelta: Float) {
-        val newScale = (scale * zoom).coerceIn(minScale, maxScale)
-        val dz = newScale / scale
-        val v = rot(cx - offX, cy - offY, rotDelta)
-        offX = cx + panX - v.x * dz
-        offY = cy + panY - v.y * dz
-        scale = newScale
-        rotationDeg = normalizeDegrees(rotationDeg + rotDelta)
-        invalidate()
-        onCameraChanged()
+        NativeCore.cameraGesture(camera, cx, cy, panX, panY, zoom, rotDelta)
+        cameraChanged()
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -220,7 +167,7 @@ class FloorMapView(context: Context, private val plan: FloorPlan) : View(context
 
         if (event.actionMasked == MotionEvent.ACTION_MOVE && lastCount == idx.size) {
             val zoom = if (idx.size == 2 && lastDist > 0f) dist / lastDist else 1f
-            val rotDelta = if (idx.size == 2) normalizeDegrees(angle - lastAngle) else 0f
+            val rotDelta = if (idx.size == 2) wrapDegrees(angle - lastAngle) else 0f
             applyGesture(lastCx, lastCy, cx - lastCx, cy - lastCy, zoom, rotDelta)
         }
 

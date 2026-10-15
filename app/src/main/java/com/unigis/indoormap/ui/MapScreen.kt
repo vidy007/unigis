@@ -51,17 +51,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.unit.dp
-import com.unigis.indoormap.map.DemoFloorPlan
 import com.unigis.indoormap.map.FloorMap
 import com.unigis.indoormap.map.FloorPlan
 import com.unigis.indoormap.map.Room
-import com.unigis.indoormap.map.RoomCategory
 import com.unigis.indoormap.map.rememberMapState
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MapScreen(plan: FloorPlan = DemoFloorPlan) {
+fun MapScreen(plan: FloorPlan) {
     val mapState = rememberMapState(plan)
     val scope = rememberCoroutineScope()
     var selectedRoom by remember { mutableStateOf<Room?>(null) }
@@ -153,7 +151,7 @@ fun MapScreen(plan: FloorPlan = DemoFloorPlan) {
 
     if (showSearch) {
         RoomSearchSheet(
-            rooms = plan.rooms,
+            search = plan::search,
             onDismiss = { showSearch = false },
             onRoomSelected = { room ->
                 showSearch = false
@@ -196,15 +194,12 @@ private fun RoomCard(room: Room, onFocus: () -> Unit, onClose: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RoomSearchSheet(
-    rooms: List<Room>,
+    search: (String) -> List<Room>,
     onDismiss: () -> Unit,
     onRoomSelected: (Room) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
-    val filtered = rooms.filter {
-        it.category != RoomCategory.CORRIDOR &&
-            (it.name.contains(query, ignoreCase = true) || it.id.contains(query, ignoreCase = true))
-    }
+    val filtered = remember(query) { search(query) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
