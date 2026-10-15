@@ -1,0 +1,235 @@
+package com.unigis.indoormap.ui
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CenterFocusStrong
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MeetingRoom
+import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.CenterFocusWeak
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.unit.dp
+import com.unigis.indoormap.map.DemoFloorPlan
+import com.unigis.indoormap.map.FloorMap
+import com.unigis.indoormap.map.FloorPlan
+import com.unigis.indoormap.map.Room
+import com.unigis.indoormap.map.RoomCategory
+import com.unigis.indoormap.map.rememberMapState
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MapScreen(plan: FloorPlan = DemoFloorPlan) {
+    val mapState = rememberMapState(plan)
+    val scope = rememberCoroutineScope()
+    var selectedRoom by remember { mutableStateOf<Room?>(null) }
+    var showSearch by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("UniGIS", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            plan.name,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showSearch = true }) {
+                        Icon(Icons.Default.Search, contentDescription = "Поиск помещения")
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                ),
+            )
+        },
+        floatingActionButton = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                SmallFloatingActionButton(onClick = { scope.launch { mapState.animateResetRotation() } }) {
+                    // Needle points to the plan's "north" (top edge).
+                    Icon(
+                        Icons.Default.Navigation,
+                        contentDescription = "Сбросить поворот",
+                        modifier = Modifier.rotate(mapState.rotation),
+                    )
+                }
+                SmallFloatingActionButton(onClick = { scope.launch { mapState.animateZoom(1.5f) } }) {
+                    Icon(Icons.Default.Add, contentDescription = "Приблизить")
+                }
+                SmallFloatingActionButton(onClick = { scope.launch { mapState.animateZoom(1 / 1.5f) } }) {
+                    Icon(Icons.Default.Remove, contentDescription = "Отдалить")
+                }
+                FloatingActionButton(onClick = { scope.launch { mapState.animateFit() } }) {
+                    Icon(Icons.Default.CenterFocusStrong, contentDescription = "Показать весь этаж")
+                }
+            }
+        },
+    ) { padding ->
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(top = padding.calculateTopPadding()),
+        ) {
+            FloorMap(
+                plan = plan,
+                state = mapState,
+                selectedRoom = selectedRoom,
+                onRoomClick = { selectedRoom = it },
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            AnimatedVisibility(
+                visible = selectedRoom != null,
+                enter = slideInVertically { it * 2 },
+                exit = slideOutVertically { it * 2 },
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, end = 88.dp, bottom = 16.dp),
+            ) {
+                // Keep showing the last room while the card animates out.
+                var lastRoom by remember { mutableStateOf<Room?>(null) }
+                selectedRoom?.let { lastRoom = it }
+                lastRoom?.let { room ->
+                    RoomCard(
+                        room = room,
+                        onFocus = { scope.launch { mapState.animateFocus(room) } },
+                        onClose = { selectedRoom = null },
+                    )
+                }
+            }
+        }
+    }
+
+    if (showSearch) {
+        RoomSearchSheet(
+            rooms = plan.rooms,
+            onDismiss = { showSearch = false },
+            onRoomSelected = { room ->
+                showSearch = false
+                selectedRoom = room
+                scope.launch { mapState.animateFocus(room) }
+            },
+        )
+    }
+}
+
+@Composable
+private fun RoomCard(room: Room, onFocus: () -> Unit, onClose: () -> Unit) {
+    ElevatedCard(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.padding(start = 16.dp, top = 12.dp, end = 4.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(room.name, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "${room.category.title} · ${"%.1f".format(room.area)} м²",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = onClose) {
+                Icon(Icons.Default.Close, contentDescription = "Закрыть")
+            }
+        }
+        Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
+            AssistChip(
+                onClick = onFocus,
+                label = { Text("Показать на карте") },
+                leadingIcon = { Icon(Icons.Outlined.CenterFocusWeak, contentDescription = null) },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RoomSearchSheet(
+    rooms: List<Room>,
+    onDismiss: () -> Unit,
+    onRoomSelected: (Room) -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    val filtered = rooms.filter {
+        it.category != RoomCategory.CORRIDOR &&
+            (it.name.contains(query, ignoreCase = true) || it.id.contains(query, ignoreCase = true))
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            placeholder = { Text("Название или номер") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            singleLine = true,
+        )
+        Spacer(Modifier.height(8.dp))
+        LazyColumn(Modifier.fillMaxWidth()) {
+            items(filtered, key = { it.id }) { room ->
+                ListItem(
+                    headlineContent = { Text(room.name) },
+                    supportingContent = { Text("${room.category.title} · ${"%.1f".format(room.area)} м²") },
+                    leadingContent = { Icon(Icons.Default.MeetingRoom, contentDescription = null) },
+                    modifier = Modifier.clickable { onRoomSelected(room) },
+                )
+            }
+        }
+    }
+}
