@@ -9,3 +9,6 @@
 .externalNativeBuild/
 .cxx/
 .kotlin/
+/lite/build/
+/lite/.gradle/
+/lite/.kotlin/
