@@ -14,10 +14,10 @@ import android.graphics.drawable.ShapeDrawable
 import android.graphics.drawable.shapes.OvalShape
 import android.os.Bundle
 import android.text.Editable
-import android.text.TextUtils
 import android.text.TextWatcher
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -225,7 +225,10 @@ class MainActivity : Activity() {
             addView(map, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             if (info.floors.size > 1) {
                 val chips = buildFloorChips(info, floorIndex)
-                val scroller = HorizontalScrollView(context).apply {
+                val scroller = object : HorizontalScrollView(context) {
+                    // Let taps between the chips reach the map when there is nothing to scroll.
+                    override fun onTouchEvent(e: MotionEvent) = getChildAt(0).width > width && super.onTouchEvent(e)
+                }.apply {
                     isHorizontalScrollBarEnabled = false
                     addView(chips)
                     post { scrollTo(chips.getChildAt(floorIndex).left, 0) }
@@ -534,9 +537,7 @@ class MainActivity : Activity() {
         d.setBounds(0, 0, dp(18), dp(18))
         setCompoundDrawables(d, null, null, null)
         compoundDrawablePadding = dp(8)
-        // One line, at least 32dp, taller with large fonts: a fixed height cut the text.
-        setSingleLine()
-        ellipsize = TextUtils.TruncateAt.END
+        // At least 32dp, taller (wrapping) with large fonts: a fixed height cut the text.
         minHeight = dp(32)
         setPadding(dp(8), dp(4), dp(16), dp(4))
         background = ripple(rounded(Color.TRANSPARENT, 8f, stroke = p.outlineVariant), p.onSurface)
@@ -589,6 +590,7 @@ private class ChipRow(context: Context, private val gap: Int) : LinearLayout(con
         for (i in 1 until childCount) (getChildAt(i).layoutParams as LayoutParams).apply {
             marginStart = if (stack) 0 else gap
             topMargin = if (stack) gap else 0
+            resolveLayoutDirection(this@ChipRow.layoutDirection)  // marginStart alone is not re-applied after attach
         }
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
