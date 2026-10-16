@@ -1,4 +1,4 @@
-package com.unigis.indoormap.map
+package com.unigismap.indoormap.map
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures

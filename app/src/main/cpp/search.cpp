@@ -1,6 +1,6 @@
-#include "unigis.hpp"
+#include "unigismap.hpp"
 
-namespace unigis {
+namespace unigismap {
 
 namespace {
 
@@ -81,4 +81,4 @@ std::vector<SearchHit> searchRooms(const Campus& campus, std::string_view query,
     return hits;
 }
 
-}  // namespace unigis
+}  // namespace unigismap

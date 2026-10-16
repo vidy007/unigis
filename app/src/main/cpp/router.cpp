@@ -1,9 +1,9 @@
-#include "unigis.hpp"
+#include "unigismap.hpp"
 
 #include <queue>
 #include <unordered_map>
 
-namespace unigis {
+namespace unigismap {
 
 namespace {
 
@@ -257,4 +257,4 @@ Route Router::route(const Place& from, const Place& to) const {
     return result;
 }
 
-}  // namespace unigis
+}  // namespace unigismap

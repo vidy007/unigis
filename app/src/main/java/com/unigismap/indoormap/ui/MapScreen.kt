@@ -1,4 +1,4 @@
-package com.unigis.indoormap.ui
+package com.unigismap.indoormap.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
@@ -51,10 +51,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.unit.dp
-import com.unigis.indoormap.map.FloorMap
-import com.unigis.indoormap.map.FloorPlan
-import com.unigis.indoormap.map.Room
-import com.unigis.indoormap.map.rememberMapState
+import com.unigismap.indoormap.map.FloorMap
+import com.unigismap.indoormap.map.FloorPlan
+import com.unigismap.indoormap.map.Room
+import com.unigismap.indoormap.map.rememberMapState
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -70,7 +70,7 @@ fun MapScreen(plan: FloorPlan) {
             CenterAlignedTopAppBar(
                 title = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("UniGIS", style = MaterialTheme.typography.titleLarge)
+                        Text("UniGISMap", style = MaterialTheme.typography.titleLarge)
                         Text(
                             plan.name,
                             style = MaterialTheme.typography.labelMedium,

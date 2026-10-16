@@ -1,4 +1,4 @@
-package com.unigis.indoormap.lite
+package com.unigismap.indoormap.lite
 
 import android.animation.ValueAnimator
 import android.content.Context
@@ -11,7 +11,7 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.view.animation.PathInterpolator
-import com.unigis.indoormap.core.NativeCore
+import com.unigismap.indoormap.core.NativeCore
 import kotlin.math.atan2
 import kotlin.math.hypot
 import kotlin.math.min
@@ -30,7 +30,7 @@ private fun wrapDegrees(d: Float): Float {
 /**
  * Renders a [FloorPlan] and lets the user pan, pinch-zoom and two-finger-rotate it.
  *
- * Camera math lives in the shared C++ core (unigis::Camera); this view owns its packed state.
+ * Camera math lives in the shared C++ core (unigismap::Camera); this view owns its packed state.
  * A world point `w` (meters) maps to the screen as `offset + rotate(w * scale, rotation)`.
  */
 class FloorMapView(context: Context, private val plan: FloorPlan) : View(context) {

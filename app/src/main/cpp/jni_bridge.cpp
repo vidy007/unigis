@@ -1,11 +1,11 @@
-// JNI surface for com.unigis.indoormap.core.NativeCore. Data crosses as flat primitive
+// JNI surface for com.unigismap.indoormap.core.NativeCore. Data crosses as flat primitive
 // arrays; the packed layouts are documented next to the Kotlin decoders in NativeCore.kt.
 
 #include <jni.h>
 
-#include "unigis.hpp"
+#include "unigismap.hpp"
 
-using namespace unigis;
+using namespace unigismap;
 
 namespace {
 
@@ -80,11 +80,11 @@ void writePoint(JNIEnv* env, jfloatArray out, Vec2 p) {
 
 }  // namespace
 
-#define UNIGIS_FN(ret, name) extern "C" JNIEXPORT ret JNICALL Java_com_unigis_indoormap_core_NativeCore_##name
+#define UNIGISMAP_FN(ret, name) extern "C" JNIEXPORT ret JNICALL Java_com_unigismap_indoormap_core_NativeCore_##name
 
 // ---- Campus ----------------------------------------------------------------
 
-UNIGIS_FN(jlong, loadCampus)(JNIEnv* env, jobject, jstring json) {
+UNIGISMAP_FN(jlong, loadCampus)(JNIEnv* env, jobject, jstring json) {
     try {
         return reinterpret_cast<jlong>(new Session(loadCampus(fromJava(env, json))));
     } catch (const std::exception& e) {
@@ -94,24 +94,24 @@ UNIGIS_FN(jlong, loadCampus)(JNIEnv* env, jobject, jstring json) {
     }
 }
 
-UNIGIS_FN(void, releaseCampus)(JNIEnv*, jobject, jlong handle) { delete session(handle); }
+UNIGISMAP_FN(void, releaseCampus)(JNIEnv*, jobject, jlong handle) { delete session(handle); }
 
-UNIGIS_FN(jobjectArray, campusInfo)(JNIEnv* env, jobject, jlong handle) {
+UNIGISMAP_FN(jobjectArray, campusInfo)(JNIEnv* env, jobject, jlong handle) {
     const Campus& c = session(handle)->campus;
     return toJava(env, std::vector<std::string>{c.name, c.attribution});
 }
 
-UNIGIS_FN(jint, buildingCount)(JNIEnv*, jobject, jlong handle) {
+UNIGISMAP_FN(jint, buildingCount)(JNIEnv*, jobject, jlong handle) {
     return static_cast<jint>(session(handle)->campus.buildings.size());
 }
 
-UNIGIS_FN(jobjectArray, buildingStrings)(JNIEnv* env, jobject, jlong handle, jint b) {
+UNIGISMAP_FN(jobjectArray, buildingStrings)(JNIEnv* env, jobject, jlong handle, jint b) {
     const Building& bld = session(handle)->campus.buildings.at(b);
     return toJava(env, std::vector<std::string>{bld.id, bld.name, bld.shortName});
 }
 
 /** [levels, placeholder(0/1), floor level 0, floor level 1, ...] */
-UNIGIS_FN(jintArray, buildingLevels)(JNIEnv* env, jobject, jlong handle, jint b) {
+UNIGISMAP_FN(jintArray, buildingLevels)(JNIEnv* env, jobject, jlong handle, jint b) {
     const Building& bld = session(handle)->campus.buildings.at(b);
     std::vector<jint> out{bld.levels, bld.placeholder ? 1 : 0};
     for (const Floor& f : bld.floors) out.push_back(f.level);
@@ -119,7 +119,7 @@ UNIGIS_FN(jintArray, buildingLevels)(JNIEnv* env, jobject, jlong handle, jint b)
 }
 
 /** Outline in campus meters: [x0, y0, x1, y1, ...] */
-UNIGIS_FN(jfloatArray, buildingOutline)(JNIEnv* env, jobject, jlong handle, jint b) {
+UNIGISMAP_FN(jfloatArray, buildingOutline)(JNIEnv* env, jobject, jlong handle, jint b) {
     const Building& bld = session(handle)->campus.buildings.at(b);
     std::vector<float> out;
     for (const Vec2& p : bld.outline.points) { out.push_back(p.x); out.push_back(p.y); }
@@ -127,7 +127,7 @@ UNIGIS_FN(jfloatArray, buildingOutline)(JNIEnv* env, jobject, jlong handle, jint
 }
 
 /** [floor name, room0 id, room0 name, room1 id, room1 name, ...] */
-UNIGIS_FN(jobjectArray, floorStrings)(JNIEnv* env, jobject, jlong handle, jint b, jint f) {
+UNIGISMAP_FN(jobjectArray, floorStrings)(JNIEnv* env, jobject, jlong handle, jint b, jint f) {
     const Floor* floor = floorOf(handle, b, f);
     if (!floor) return nullptr;
     std::vector<std::string> out{floor->name};
@@ -141,7 +141,7 @@ UNIGIS_FN(jobjectArray, floorStrings)(JNIEnv* env, jobject, jlong handle, jint b
  *  nDoors, (x1, y1, x2, y2, exterior) * nDoors,
  *  nConnectors, (kind, x, y) * nConnectors]
  */
-UNIGIS_FN(jfloatArray, floorGeometry)(JNIEnv* env, jobject, jlong handle, jint b, jint f) {
+UNIGISMAP_FN(jfloatArray, floorGeometry)(JNIEnv* env, jobject, jlong handle, jint b, jint f) {
     const Floor* floor = floorOf(handle, b, f);
     if (!floor) return nullptr;
     std::vector<float> out{floor->bounds.left, floor->bounds.top, floor->bounds.right, floor->bounds.bottom,
@@ -158,22 +158,22 @@ UNIGIS_FN(jfloatArray, floorGeometry)(JNIEnv* env, jobject, jlong handle, jint b
     return toJava(env, out);
 }
 
-UNIGIS_FN(jint, roomAt)(JNIEnv*, jobject, jlong handle, jint b, jint f, jfloat x, jfloat y) {
+UNIGISMAP_FN(jint, roomAt)(JNIEnv*, jobject, jlong handle, jint b, jint f, jfloat x, jfloat y) {
     const Floor* floor = floorOf(handle, b, f);
     return floor ? floor->roomAt({x, y}) : -1;
 }
 
 /** Hits as triples [building, floor, room, ...], best first. Negative b/f search everywhere. */
-UNIGIS_FN(jintArray, searchRooms)(JNIEnv* env, jobject, jlong handle, jstring query, jint b, jint f) {
+UNIGISMAP_FN(jintArray, searchRooms)(JNIEnv* env, jobject, jlong handle, jstring query, jint b, jint f) {
     std::vector<jint> out;
-    for (const SearchHit& h : unigis::searchRooms(session(handle)->campus, fromJava(env, query), b, f)) {
+    for (const SearchHit& h : unigismap::searchRooms(session(handle)->campus, fromJava(env, query), b, f)) {
         out.insert(out.end(), {h.building, h.floor, h.room});
     }
     return toJava(env, out);
 }
 
 /** [found(0/1), meters, seconds, nLegs, (building, floor, nPoints, x, y, ...) * nLegs] */
-UNIGIS_FN(jfloatArray, route)(JNIEnv* env, jobject, jlong handle, jint fb, jint ff, jint fr, jint tb, jint tf, jint tr) {
+UNIGISMAP_FN(jfloatArray, route)(JNIEnv* env, jobject, jlong handle, jint fb, jint ff, jint fr, jint tb, jint tf, jint tr) {
     const Route r = session(handle)->router.route({fb, ff, fr}, {tb, tf, tr});
     std::vector<float> out{r.found ? 1.f : 0.f, r.length, r.seconds, static_cast<float>(r.legs.size())};
     for (const RouteLeg& leg : r.legs) {
@@ -186,58 +186,58 @@ UNIGIS_FN(jfloatArray, route)(JNIEnv* env, jobject, jlong handle, jint fb, jint 
 
 // ---- Camera ------------------------------------------------------------------
 
-UNIGIS_FN(jint, cameraStateSize)(JNIEnv*, jobject) { return cam::Count; }
+UNIGISMAP_FN(jint, cameraStateSize)(JNIEnv*, jobject) { return cam::Count; }
 
-UNIGIS_FN(void, cameraInit)(JNIEnv* env, jobject, jfloatArray state, jfloat l, jfloat t, jfloat r, jfloat b) {
+UNIGISMAP_FN(void, cameraInit)(JNIEnv* env, jobject, jfloatArray state, jfloat l, jfloat t, jfloat r, jfloat b) {
     if (env->GetArrayLength(state) < cam::Count) return;
     float init[cam::Count];
     Camera::init(init, {l, t, r, b});
     env->SetFloatArrayRegion(state, 0, cam::Count, init);
 }
 
-UNIGIS_FN(void, cameraViewport)(JNIEnv* env, jobject, jfloatArray state, jfloat w, jfloat h) {
+UNIGISMAP_FN(void, cameraViewport)(JNIEnv* env, jobject, jfloatArray state, jfloat w, jfloat h) {
     withCamera(env, state, [&](Camera& c) { c.onViewportChanged(w, h); });
 }
 
-UNIGIS_FN(void, cameraGesture)(JNIEnv* env, jobject, jfloatArray state, jfloat cx, jfloat cy, jfloat px, jfloat py,
+UNIGISMAP_FN(void, cameraGesture)(JNIEnv* env, jobject, jfloatArray state, jfloat cx, jfloat cy, jfloat px, jfloat py,
                                jfloat zoom, jfloat rotation) {
     withCamera(env, state, [&](Camera& c) { c.onGesture({cx, cy}, {px, py}, zoom, rotation); });
 }
 
-UNIGIS_FN(void, cameraFit)(JNIEnv* env, jobject, jfloatArray state) {
+UNIGISMAP_FN(void, cameraFit)(JNIEnv* env, jobject, jfloatArray state) {
     withCamera(env, state, [](Camera& c) { c.fitToScreen(); });
 }
 
-UNIGIS_FN(void, cameraPrepareFit)(JNIEnv* env, jobject, jfloatArray state) {
+UNIGISMAP_FN(void, cameraPrepareFit)(JNIEnv* env, jobject, jfloatArray state) {
     withCamera(env, state, [](Camera& c) { c.prepareFit(); });
 }
 
-UNIGIS_FN(void, cameraPrepareResetRotation)(JNIEnv* env, jobject, jfloatArray state) {
+UNIGISMAP_FN(void, cameraPrepareResetRotation)(JNIEnv* env, jobject, jfloatArray state) {
     withCamera(env, state, [](Camera& c) { c.prepareResetRotation(); });
 }
 
 /** A NaN pivot zooms around the viewport center. */
-UNIGIS_FN(void, cameraPrepareZoom)(JNIEnv* env, jobject, jfloatArray state, jfloat factor, jfloat px, jfloat py) {
+UNIGISMAP_FN(void, cameraPrepareZoom)(JNIEnv* env, jobject, jfloatArray state, jfloat factor, jfloat px, jfloat py) {
     withCamera(env, state, [&](Camera& c) {
         if (std::isnan(px) || std::isnan(py)) c.prepareZoomAtCenter(factor);
         else c.prepareZoom(factor, {px, py});
     });
 }
 
-UNIGIS_FN(void, cameraPrepareFocus)(JNIEnv* env, jobject, jfloatArray state, jfloat l, jfloat t, jfloat r, jfloat b) {
+UNIGISMAP_FN(void, cameraPrepareFocus)(JNIEnv* env, jobject, jfloatArray state, jfloat l, jfloat t, jfloat r, jfloat b) {
     withCamera(env, state, [&](Camera& c) { c.prepareFocus({l, t, r, b}); });
 }
 
-UNIGIS_FN(void, cameraStep)(JNIEnv* env, jobject, jfloatArray state, jfloat t) {
+UNIGISMAP_FN(void, cameraStep)(JNIEnv* env, jobject, jfloatArray state, jfloat t) {
     withCamera(env, state, [&](Camera& c) { c.step(t); });
 }
 
-UNIGIS_FN(void, cameraToScreen)(JNIEnv* env, jobject, jfloatArray state, jfloat x, jfloat y, jfloatArray out) {
+UNIGISMAP_FN(void, cameraToScreen)(JNIEnv* env, jobject, jfloatArray state, jfloat x, jfloat y, jfloatArray out) {
     Vec2 p;
     if (withCamera(env, state, [&](Camera& c) { p = c.toScreen({x, y}); })) writePoint(env, out, p);
 }
 
-UNIGIS_FN(void, cameraToWorld)(JNIEnv* env, jobject, jfloatArray state, jfloat x, jfloat y, jfloatArray out) {
+UNIGISMAP_FN(void, cameraToWorld)(JNIEnv* env, jobject, jfloatArray state, jfloat x, jfloat y, jfloatArray out) {
     Vec2 p;
     if (withCamera(env, state, [&](Camera& c) { p = c.toWorld({x, y}); })) writePoint(env, out, p);
 }

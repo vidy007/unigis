@@ -1,18 +1,18 @@
-package com.unigis.indoormap.lite
+package com.unigismap.indoormap.lite
 
 import android.graphics.PointF
 import android.graphics.RectF
-import com.unigis.indoormap.core.CampusCore
-import com.unigis.indoormap.core.FloorRef
-import com.unigis.indoormap.core.MapPoint
-import com.unigis.indoormap.core.MapRect
+import com.unigismap.indoormap.core.CampusCore
+import com.unigismap.indoormap.core.FloorRef
+import com.unigismap.indoormap.core.MapPoint
+import com.unigismap.indoormap.core.MapRect
 
 /**
  * android.graphics-side view of a floor from the shared core layer (shared/, backed by the
  * C++ core). Mirrors app/.../map/FloorPlan.kt, which does the same for Compose types.
  * All coordinates are in meters, origin at the top-left corner of the floor plan.
  */
-typealias RoomCategory = com.unigis.indoormap.core.RoomCategory
+typealias RoomCategory = com.unigismap.indoormap.core.RoomCategory
 
 /** [area] is in square meters, computed natively from the room polygon. */
 class Room(val id: String, val name: String, val category: RoomCategory, val bounds: RectF, val area: Float)

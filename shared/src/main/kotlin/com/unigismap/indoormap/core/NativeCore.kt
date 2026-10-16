@@ -1,13 +1,13 @@
-package com.unigis.indoormap.core
+package com.unigismap.indoormap.core
 
 /**
- * JNI entry points into libunigis (app/src/main/cpp). All map logic lives in C++:
+ * JNI entry points into libunigismap (app/src/main/cpp). All map logic lives in C++:
  * campus data, hit testing, search, routing and camera math. Kotlin only decodes the
  * packed arrays below into UI models; layouts are documented in jni_bridge.cpp.
  */
 object NativeCore {
     init {
-        System.loadLibrary("unigis")
+        System.loadLibrary("unigismap")
     }
 
     // Campus ---------------------------------------------------------------------------------
@@ -30,7 +30,7 @@ object NativeCore {
         toBuilding: Int, toFloor: Int, toRoom: Int,
     ): FloatArray
 
-    // Camera: state is a Kotlin-owned FloatArray, see cam::Field in unigis.hpp for the layout -------
+    // Camera: state is a Kotlin-owned FloatArray, see cam::Field in unigismap.hpp for the layout -------
 
     const val CAMERA_SCALE = 0
     const val CAMERA_ROTATION = 1

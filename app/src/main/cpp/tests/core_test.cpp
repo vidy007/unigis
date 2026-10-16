@@ -7,9 +7,9 @@
 #include <sstream>
 #include <string>
 
-#include "../unigis.hpp"
+#include "../unigismap.hpp"
 
-using namespace unigis;
+using namespace unigismap;
 
 static int failures = 0;
 

@@ -1,4 +1,4 @@
-package com.unigis.indoormap.lite
+package com.unigismap.indoormap.lite
 
 import android.app.Activity
 import android.content.Context
@@ -26,10 +26,10 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import com.unigis.indoormap.core.CampusCore
+import com.unigismap.indoormap.core.CampusCore
 
 /**
- * Lite build of the UniGIS app: the same app (same C++ core, shared Kotlin layer in shared/,
+ * Lite build of the UniGISMap app: the same app (same C++ core, shared Kotlin layer in shared/,
  * same data and screens) with the Compose UI re-done in plain framework Views styled after
  * Material 3, so it builds without Google Maven (AndroidX / Compose / AGP).
  * Keep it in step with app/.../ui/MapScreen.kt when the app's screens change.
@@ -112,7 +112,7 @@ class MainActivity : Activity() {
         val titles = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setGravity(Gravity.CENTER_HORIZONTAL)
-            addView(text("UniGIS", 22f, p.onSurface))
+            addView(text("UniGISMap", 22f, p.onSurface))
             addView(text(plan.name, 12f, p.onSurfaceVariant, medium = true))
         }
         addView(titles, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.CENTER))

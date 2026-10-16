@@ -5,16 +5,16 @@ plugins {
 }
 
 android {
-    namespace = "com.unigis.indoormap"
+    namespace = "com.unigismap.indoormap"
     compileSdk = 36
     ndkVersion = "29.0.14206865"
 
     defaultConfig {
-        applicationId = "com.unigis.indoormap"
+        applicationId = "com.unigismap.indoormap"
         minSdk = 26
         targetSdk = 36
-        versionCode = providers.gradleProperty("unigis.versionCode").get().toInt()
-        versionName = providers.gradleProperty("unigis.versionName").get()
+        versionCode = providers.gradleProperty("unigismap.versionCode").get().toInt()
+        versionName = providers.gradleProperty("unigismap.versionName").get()
 
         externalNativeBuild {
             cmake {

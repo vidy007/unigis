@@ -1,6 +1,6 @@
-#include "unigis.hpp"
+#include "unigismap.hpp"
 
-namespace unigis {
+namespace unigismap {
 
 void Camera::init(float* state, const Rect& plan) {
     std::fill(state, state + cam::Count, 0.f);
@@ -78,4 +78,4 @@ void Camera::prepareFocus(const Rect& target) {
     prepare(target.center(), fit, rotation());
 }
 
-}  // namespace unigis
+}  // namespace unigismap

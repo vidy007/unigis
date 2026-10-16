@@ -28,14 +28,14 @@ $out = 'build\apk'
 # Same version as the main app unless overridden.
 $props = Get-Content ..\gradle.properties
 function Prop($key) { ($props | Where-Object { $_ -like "$key=*" } | Select-Object -First 1) -replace "^$([regex]::Escape($key))=", '' }
-$versionName = if ($env:VERSION_NAME) { $env:VERSION_NAME } else { Prop 'unigis.versionName' }
-$versionCode = if ($env:VERSION_CODE) { $env:VERSION_CODE } else { Prop 'unigis.versionCode' }
-$apkName = "unigis-lite-$versionName.apk"
+$versionName = if ($env:VERSION_NAME) { $env:VERSION_NAME } else { Prop 'unigismap.versionName' }
+$versionCode = if ($env:VERSION_CODE) { $env:VERSION_CODE } else { Prop 'unigismap.versionCode' }
+$apkName = "unigismap-lite-$versionName.apk"
 
 Remove-Item -Recurse -Force $out, 'build\gen', 'build\native', 'build\dex' -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $out, 'build\gen', 'build\native', 'build\dex' | Out-Null
 
-Write-Host "> clang++: libunigis.so ($($abis -join ' '))"
+Write-Host "> clang++: libunigismap.so ($($abis -join ' '))"
 $sources = @(Get-ChildItem "$core\*.cpp" | ForEach-Object FullName)
 foreach ($abi in $abis) {
     New-Item -ItemType Directory -Force "build\native\lib\$abi" | Out-Null
@@ -43,7 +43,7 @@ foreach ($abi in $abis) {
     Run $clang "--target=$($targets[$abi])$minSdk" -std=c++20 -O2 -fPIC -shared -Wall -Wextra `
         -fvisibility=hidden -ffunction-sections -fdata-sections `
         -static-libstdc++ '-Wl,--gc-sections' '-Wl,-z,max-page-size=16384' -s `
-        @sources -llog -o "build\native\lib\$abi\libunigis.so"
+        @sources -llog -o "build\native\lib\$abi\libunigismap.so"
 }
 
 Write-Host '> aapt: resources + assets + R.java'
@@ -57,13 +57,13 @@ Run $gradle -q --no-daemon -p . jar copyRuntime
 
 Write-Host '> d8: classes.dex'
 Run "$buildTools\d8.bat" --release --min-api $minSdk --lib $androidJar --output build\dex `
-    build\libs\unigis-lite.jar @(Get-ChildItem build\runtime\*.jar | ForEach-Object FullName)
+    build\libs\unigismap-lite.jar @(Get-ChildItem build\runtime\*.jar | ForEach-Object FullName)
 
 Write-Host '> package + align + sign'
 Copy-Item build\dex\classes.dex "$out\classes.dex"
 Push-Location $out; try { Run "$buildTools\aapt.exe" add -f unsigned.apk classes.dex | Out-Null } finally { Pop-Location }
 Push-Location build\native
-try { Run "$buildTools\aapt.exe" add -f "..\..\$out\unsigned.apk" @($abis | ForEach-Object { "lib/$_/libunigis.so" }) | Out-Null }
+try { Run "$buildTools\aapt.exe" add -f "..\..\$out\unsigned.apk" @($abis | ForEach-Object { "lib/$_/libunigismap.so" }) | Out-Null }
 finally { Pop-Location }
 Run "$buildTools\zipalign.exe" -f -p 4 "$out\unsigned.apk" "$out\aligned.apk"
 Run "$buildTools\apksigner.bat" sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android `

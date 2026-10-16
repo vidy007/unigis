@@ -1,4 +1,4 @@
-package com.unigis.indoormap.lite
+package com.unigismap.indoormap.lite
 
 import android.content.Context
 import android.content.res.Configuration

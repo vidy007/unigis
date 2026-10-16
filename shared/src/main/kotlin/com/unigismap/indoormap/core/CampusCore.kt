@@ -1,4 +1,4 @@
-package com.unigis.indoormap.core
+package com.unigismap.indoormap.core
 
 import android.content.Context
 
@@ -9,7 +9,7 @@ import android.content.Context
  * conversion to Compose or android.graphics types to each UI.
  */
 
-/** Order must match unigis::RoomCategory in unigis.hpp: the ordinal crosses JNI. */
+/** Order must match unigismap::RoomCategory in unigismap.hpp: the ordinal crosses JNI. */
 enum class RoomCategory(val title: String) {
     OFFICE("Кабинет"),
     MEETING("Переговорная"),

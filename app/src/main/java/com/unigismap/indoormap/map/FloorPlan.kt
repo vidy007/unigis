@@ -1,18 +1,18 @@
-package com.unigis.indoormap.map
+package com.unigismap.indoormap.map
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import com.unigis.indoormap.core.CampusCore
-import com.unigis.indoormap.core.FloorRef
-import com.unigis.indoormap.core.MapPoint
-import com.unigis.indoormap.core.MapRect
+import com.unigismap.indoormap.core.CampusCore
+import com.unigismap.indoormap.core.FloorRef
+import com.unigismap.indoormap.core.MapPoint
+import com.unigismap.indoormap.core.MapRect
 
 /**
  * Compose-side view of a floor from the shared core layer (shared/, backed by the C++ core).
  * Only converts geometry to Compose types; the lite app has the same adapter for android.graphics.
  * All coordinates are in meters, origin at the top-left corner of the floor plan.
  */
-typealias RoomCategory = com.unigis.indoormap.core.RoomCategory
+typealias RoomCategory = com.unigismap.indoormap.core.RoomCategory
 
 data class Room(
     val id: String,

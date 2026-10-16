@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "UniGIS"
+rootProject.name = "UniGISMap"
 include(":app")

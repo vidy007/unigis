@@ -1,4 +1,4 @@
-package com.unigis.indoormap.ui.theme
+package com.unigismap.indoormap.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -38,7 +38,7 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun UniGisTheme(
+fun UniGisMapTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit,

@@ -1,8 +1,8 @@
-#include "unigis.hpp"
+#include "unigismap.hpp"
 
 #include <cstdlib>
 
-namespace unigis::json {
+namespace unigismap::json {
 
 namespace {
 
@@ -194,4 +194,4 @@ const Value& Value::operator[](std::string_view key) const {
 
 Value parse(std::string_view text) { return Parser(text).parseDocument(); }
 
-}  // namespace unigis::json
+}  // namespace unigismap::json

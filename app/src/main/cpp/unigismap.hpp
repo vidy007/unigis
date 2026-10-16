@@ -18,7 +18,7 @@
 #include <utility>
 #include <vector>
 
-namespace unigis {
+namespace unigismap {
 
 // ==== 1. Geometry ===========================================================
 
@@ -466,4 +466,4 @@ private:
     void prepare(Vec2 targetCenter, float targetScale, float targetRotation);
 };
 
-}  // namespace unigis
+}  // namespace unigismap

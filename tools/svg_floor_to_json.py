@@ -1,4 +1,4 @@
-"""Converts a floor plan drawn in Inkscape/Figma (SVG) into a UniGIS floor and puts it into campus.json.
+"""Converts a floor plan drawn in Inkscape/Figma (SVG) into a UniGISMap floor and puts it into campus.json.
 
 One SVG file = one floor. Coordinates are SVG user units after all transforms (translate/scale/rotate/
 matrix/skew on groups and elements), converted to meters; y points down like in SVG. The SVG origin is

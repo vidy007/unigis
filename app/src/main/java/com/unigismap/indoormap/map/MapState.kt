@@ -1,4 +1,4 @@
-package com.unigis.indoormap.map
+package com.unigismap.indoormap.map
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
@@ -12,10 +12,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import com.unigis.indoormap.core.NativeCore
+import com.unigismap.indoormap.core.NativeCore
 
 /**
- * Camera over the floor plan. The math lives in C++ (unigis::Camera); this class owns the
+ * Camera over the floor plan. The math lives in C++ (unigismap::Camera); this class owns the
  * packed state array and mirrors scale/rotation/offset into Compose state for recomposition.
  * A world point `w` (meters) maps to the screen as `offset + rotate(w * scale, rotation)`.
  */

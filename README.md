@@ -1,4 +1,4 @@
-# UniGIS — навигация по кампусу НГТУ (Android)
+# UniGISMap — навигация по кампусу НГТУ (Android)
 
 Приложение для навигации внутри корпусов университета и между ними. Работает полностью
 офлайн: данные кампуса лежат в APK (`app/src/main/assets/campus.json`), вся логика выполняется
@@ -9,16 +9,16 @@
 | Интерфейс | Jetpack Compose, Material 3 | Android View + Canvas, оформление под Material 3 |
 | Логика | C++-ядро + `shared/` | то же C++-ядро + тот же `shared/` |
 | Сборка | Gradle + AGP (Google Maven), CMake | Gradle (только Kotlin с Maven Central), `clang++` из NDK, aapt/dx (или d8) |
-| Пакет | `com.unigis.indoormap` | `com.unigis.indoormap.lite` (ставится рядом) |
+| Пакет | `com.unigismap.indoormap` | `com.unigismap.indoormap.lite` (ставится рядом) |
 
 ## Архитектура
 ```
-shared/src/main/kotlin/com/unigis/indoormap/core/   — общий для app и lite слой без UI (Kotlin + Android framework)
+shared/src/main/kotlin/com/unigismap/indoormap/core/   — общий для app и lite слой без UI (Kotlin + Android framework)
 ├── NativeCore.kt                — external-функции JNI
 └── CampusCore.kt                — загрузка campus.json, декодирование данных ядра, поиск, маршруты
 app/src/main/
 ├── cpp/                         — C++20 ядро (NDK), без внешних зависимостей
-│   ├── unigis.hpp               — весь API ядра в одном заголовке, по разделам:
+│   ├── unigismap.hpp            — весь API ядра в одном заголовке, по разделам:
 │   │                              геометрия (Vec2, Rect, Polygon, Frame), JSON, модель кампуса
 │   │                              (Campus → Building → Floor → Room/Door/Connector), поиск, маршруты, камера
 │   ├── json.cpp                 — минимальный JSON-парсер
@@ -28,18 +28,18 @@ app/src/main/
 │   ├── camera.cpp               — камера карты: масштаб/поворот/сдвиг, жесты, анимации
 │   ├── jni_bridge.cpp           — JNI: данные передаются плоскими массивами
 │   └── tests/core_test.cpp      — тесты ядра
-├── java/com/unigis/indoormap/
+├── java/com/unigismap/indoormap/
 │   ├── map/FloorPlan.kt         — адаптер shared → типы Compose (Room, Door, FloorPlan)
 │   ├── map/MapState.kt          — состояние камеры для Compose (математика в C++)
 │   ├── map/FloorMap.kt          — отрисовка (Compose Canvas)
 │   └── ui/                      — экран, тема (Material 3)
 └── assets/campus.json           — данные кампуса (генерируется, см. ниже)
-lite/src/main/kotlin/com/unigis/indoormap/lite/
+lite/src/main/kotlin/com/unigismap/indoormap/lite/
 ├── FloorPlan.kt                 — адаптер shared → android.graphics (зеркало app/.../map/FloorPlan.kt)
 ├── FloorMapView.kt              — отрисовка и жесты (математика камеры в C++)
 └── MainActivity.kt              — те же экраны, что ui/MapScreen.kt, на обычных View
 ```
-Версия (`unigis.versionName`/`unigis.versionCode`) задаётся в `gradle.properties`, версия Kotlin — в
+Версия (`unigismap.versionName`/`unigismap.versionCode`) задаётся в `gradle.properties`, версия Kotlin — в
 `gradle/libs.versions.toml`; оба варианта берут их оттуда. Новая функция добавляется в C++-ядро и
 `shared/`, а в интерфейс — в обоих вариантах.
 
@@ -60,7 +60,7 @@ curl -o nstu.osm "https://api.openstreetmap.org/api/0.6/map?bbox=82.8960,54.9810
 python tools/osm_to_campus.py nstu.osm
 ```
 Формат этажа: помещения (`rect` или `polygon` в метрах), двери (`a`, `b`, `exterior`), лестницы и лифты
-(`connectors` с общим `group` на разных этажах). Подробности в `unigis.hpp` (раздел «Campus model»).
+(`connectors` с общим `group` на разных этажах). Подробности в `unigismap.hpp` (раздел «Campus model»).
 
 ### Этажи из SVG (`tools/svg_floor_to_json.py`)
 Планы удобно обводить в Inkscape или Figma поверх плана эвакуации, а не писать координаты вручную.
@@ -105,12 +105,12 @@ NDK и CMake Gradle скачивает сам при первой сборке.
 `lite/` — то же приложение с минимумом зависимостей: без AndroidX, Compose, AGP и Google Maven.
 Отличается только интерфейс (View + Canvas вместо Compose); C++-ядро, слой `shared/`, данные и версия
 общие. Ядро собирается одной командой `clang++` из NDK, без CMake; libc++ линкуется статически,
-так что в APK одна `libunigis.so` на ABI.
+так что в APK одна `libunigismap.so` на ABI.
 
 Нужны пакеты Debian/Ubuntu, Gradle (Kotlin с Maven Central), JDK 17+ и Android NDK:
 ```
 sudo apt-get install android-sdk-platform-23 aapt dalvik-exchange apksigner zipalign zip
-ANDROID_NDK_HOME=/path/to/ndk lite/build-apk.sh   # → lite/build/apk/unigis-lite-*.apk
+ANDROID_NDK_HOME=/path/to/ndk lite/build-apk.sh   # → lite/build/apk/unigismap-lite-*.apk
 ```
 На Windows то же самое делает `lite/build-apk.ps1` с инструментами Android SDK (aapt, d8, zipalign,
 apksigner из build-tools) и NDK, установленными через Android Studio:

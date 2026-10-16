@@ -1,5 +1,5 @@
 // Standalone build for the dependency-free variant; see build-apk.sh.
-rootProject.name = "unigis-lite"
+rootProject.name = "unigismap-lite"
 
 dependencyResolutionManagement {
     // Same Kotlin version as the main app.

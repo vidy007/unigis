@@ -48,19 +48,19 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: unigis-lite-${{ steps.version.outputs.name }}
-          path: lite/build/apk/unigis-lite-*.apk
+          name: unigismap-lite-${{ steps.version.outputs.name }}
+          path: lite/build/apk/unigismap-lite-*.apk
 
       - name: Publish pre-release
         if: startsWith(github.ref, 'refs/tags/lite-v')
         uses: softprops/action-gh-release@v2
         with:
           prerelease: true
-          name: UniGIS Lite ${{ steps.version.outputs.name }}
-          files: lite/build/apk/unigis-lite-*.apk
+          name: UniGISMap Lite ${{ steps.version.outputs.name }}
+          files: lite/build/apk/unigismap-lite-*.apk
           body: |
-            Тестовый пре-релиз лайт-версии UniGIS: интерфейс на Android View, логика карты в общем C++-ядре, данные кампуса офлайн.
+            Тестовый пре-релиз лайт-версии UniGISMap: интерфейс на Android View, логика карты в общем C++-ядре, данные кампуса офлайн.
 
             - Android 8.0+ (minSdk 26), подпись — отладочный ключ `lite/debug.keystore`.
-            - Устанавливается рядом с основной версией (`com.unigis.indoormap.lite`).
+            - Устанавливается рядом с основной версией (`com.unigismap.indoormap.lite`).
             - Жесты: перемещение, масштаб и вращение двумя пальцами, двойной тап — приближение.

@@ -16,9 +16,9 @@ CORE=../app/src/main/cpp
 OUT=build/apk
 GRADLE=${GRADLE:-$(command -v gradle || echo ../gradlew)}
 # Same version as the main app unless CI overrides it.
-VERSION_NAME=${VERSION_NAME:-$(sed -n 's/^unigis\.versionName=//p' ../gradle.properties | tr -d '\r')}
-VERSION_CODE=${VERSION_CODE:-$(sed -n 's/^unigis\.versionCode=//p' ../gradle.properties | tr -d '\r')}
-APK_NAME=unigis-lite-$VERSION_NAME.apk
+VERSION_NAME=${VERSION_NAME:-$(sed -n 's/^unigismap\.versionName=//p' ../gradle.properties | tr -d '\r')}
+VERSION_CODE=${VERSION_CODE:-$(sed -n 's/^unigismap\.versionCode=//p' ../gradle.properties | tr -d '\r')}
+APK_NAME=unigismap-lite-$VERSION_NAME.apk
 
 if [ -z "$NDK" ] || [ ! -d "$NDK/toolchains/llvm/prebuilt" ]; then
   echo "Android NDK not found: set ANDROID_NDK_HOME" >&2
@@ -29,7 +29,7 @@ CLANGXX=$(echo "$NDK"/toolchains/llvm/prebuilt/*/bin/clang++)
 rm -rf "$OUT" build/gen build/native
 mkdir -p "$OUT" build/gen build/native
 
-echo "> clang++: libunigis.so ($ABIS)"
+echo "> clang++: libunigismap.so ($ABIS)"
 for abi in $ABIS; do
   case $abi in
     arm64-v8a)   target=aarch64-linux-android$MIN_SDK ;;
@@ -44,7 +44,7 @@ for abi in $ABIS; do
     -fvisibility=hidden -ffunction-sections -fdata-sections \
     -static-libstdc++ -Wl,--gc-sections -Wl,-z,max-page-size=16384 -s \
     "$CORE"/*.cpp -llog \
-    -o "build/native/lib/$abi/libunigis.so"
+    -o "build/native/lib/$abi/libunigismap.so"
 done
 
 echo "> aapt: resources + assets + R.java"
@@ -64,11 +64,11 @@ for jar in build/runtime/*.jar; do
   zip -q -d "$OUT/libs/$(basename "$jar")" 'META-INF/versions/*' 'module-info.class' '*/module-info.class' >/dev/null 2>&1 || true
 done
 dalvik-exchange --dex --min-sdk-version=$MIN_SDK --output="$OUT/classes.dex" \
-  build/libs/unigis-lite.jar "$OUT"/libs/*.jar
+  build/libs/unigismap-lite.jar "$OUT"/libs/*.jar
 
 echo "> package + align + sign"
 (cd "$OUT" && aapt add -f unsigned.apk classes.dex >/dev/null)
-(cd build/native && aapt add -f "../../$OUT/unsigned.apk" lib/*/libunigis.so >/dev/null)
+(cd build/native && aapt add -f "../../$OUT/unsigned.apk" lib/*/libunigismap.so >/dev/null)
 zipalign -f -p 4 "$OUT/unsigned.apk" "$OUT/aligned.apk"
 if [ ! -f debug.keystore ]; then
   keytool -genkeypair -keystore debug.keystore -storepass android -keypass android \

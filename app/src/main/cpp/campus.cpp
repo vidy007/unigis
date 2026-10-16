@@ -1,6 +1,6 @@
-#include "unigis.hpp"
+#include "unigismap.hpp"
 
-namespace unigis {
+namespace unigismap {
 
 namespace {
 
@@ -167,4 +167,4 @@ Campus loadCampus(std::string_view text) {
     return c;
 }
 
-}  // namespace unigis
+}  // namespace unigismap
