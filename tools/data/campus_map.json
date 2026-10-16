@@ -1,6 +1,8 @@
 {
   "_comment": [
-    "Legend of the printed NSTU campus map (Карта кампуса): every object on it and how to find it in OSM.",
+    "Legend of the printed NSTU campus map (Карта кампуса), upper half only: the academic block north of",
+    "пр. К. Маркса (корпуса 1-8 and the library); dormitories and the southern block are left out on purpose.",
+    "Every object and how to find it in OSM. Stops and walkways are kept only around these buildings.",
     "kind: academic (green badges), dorm (orange), facility (blue). number: the badge text.",
     "osm: exact object (way/N or relation/N), wins over match. match: tag -> regex (all must match),",
     "or a list of such dicts (any may match); tags of POI nodes inside a building count for that building.",
@@ -26,25 +28,7 @@
                {"name": "(?i)\\bкорпус\\s*№?\\s*7\\b"}]},
     {"id": "k8", "kind": "academic", "number": "8", "name": "Корпус 8", "osm": "way/51992789"},
 
-    {"id": "d1", "kind": "dorm", "number": "1", "name": "Общежитие № 1", "match": {"name": "(?i)общежити\\D*№?\\s*1(?!\\d)"}},
-    {"id": "d2", "kind": "dorm", "number": "2", "name": "Общежитие № 2", "match": {"name": "(?i)общежити\\D*№?\\s*2(?!\\d)"}},
-    {"id": "d3", "kind": "dorm", "number": "3", "name": "Общежитие № 3", "match": {"name": "(?i)общежити\\D*№?\\s*3(?!\\d)"}},
-    {"id": "d4", "kind": "dorm", "number": "4", "name": "Общежитие № 4", "match": {"name": "(?i)общежити\\D*№?\\s*4(?!\\d)"}},
-    {"id": "d5", "kind": "dorm", "number": "5", "name": "Общежитие № 5", "match": {"name": "(?i)общежити\\D*№?\\s*5(?!\\d)"}},
-    {"id": "d6", "kind": "dorm", "number": "6", "name": "Общежитие № 6", "match": {"name": "(?i)общежити\\D*№?\\s*6(?!\\d)"}},
-    {"id": "d7", "kind": "dorm", "number": "7", "name": "Общежитие № 7", "match": {"name": "(?i)общежити\\D*№?\\s*7(?!\\d)"}},
-    {"id": "d8", "kind": "dorm", "number": "8", "name": "Общежитие № 8", "match": {"name": "(?i)общежити\\D*№?\\s*8(?!\\d)"}},
-
-    {"id": "f1", "kind": "facility", "number": "1", "name": "Центр культуры",
-     "match": {"name": "(?i)центр культуры|дом культуры"}},
-    {"id": "f2", "kind": "facility", "number": "2", "name": "Дворец спорта", "match": {"name": "(?i)дворец спорта"}},
-    {"id": "f3", "kind": "facility", "number": "3", "name": "Спортивный комплекс, бассейн",
-     "match": [{"name": "(?i)бассейн|спортивный комплекс"}, {"leisure": "^swimming_pool$", "building": "."}]},
-    {"id": "f4", "kind": "facility", "number": "4", "name": "Спортивная площадка", "count": 2,
-     "match": {"leisure": "^(pitch|stadium|track)$"}},
-    {"id": "f5", "kind": "facility", "number": "5", "name": "Научная библиотека", "match": {"name": "(?i)библиотек"}},
-    {"id": "f6", "kind": "facility", "number": "6", "name": "Поликлиника", "match": {"name": "(?i)поликлиник"}},
-    {"id": "f7", "kind": "facility", "number": "7", "name": "Бизнес-инкубатор «Гараж», боулинг-центр «Фотон»",
-     "short": "«Гараж», «Фотон»", "match": {"name": "(?i)гараж»?|фотон|бизнес-инкубатор"}}
+    {"id": "f5", "kind": "facility", "number": "5", "name": "Научная библиотека",
+     "match": [{"name": "(?i)библиотек"}, {"amenity": "^library$"}]}
   ]
 }

@@ -35,8 +35,9 @@ WALKABLE = {
     "footway", "path", "pedestrian", "steps", "service", "living_street",
     "residential", "unclassified", "tertiary", "secondary", "crossing", "corridor",
 }
-FOOTWAY_MARGIN_M = 80.0
-STOP_MARGIN_M = 60.0
+# The map covers the selected buildings plus this margin (the streets around them); walkways are
+# clipped to it and only stops inside it are kept.
+REGION_MARGIN_M = 60.0
 # Matches by tags are searched only this far from the campus origin (the extract is bigger).
 SEARCH_RADIUS_M = 600.0
 # OSM maps one stop as several objects (platform, stop position); closer ones are merged.
@@ -61,6 +62,92 @@ def contains(ring: list[list[float]], p: list[float]) -> bool:
         if (ay > p[1]) != (by > p[1]) and p[0] < (bx - ax) * (p[1] - ay) / (by - ay) + ax:
             inside = not inside
     return inside
+
+
+def segment_distance(p: list[float], a: list[float], b: list[float]) -> float:
+    ab = (b[0] - a[0], b[1] - a[1])
+    len2 = ab[0] ** 2 + ab[1] ** 2
+    t = 0.0 if len2 == 0 else max(0.0, min(1.0, ((p[0] - a[0]) * ab[0] + (p[1] - a[1]) * ab[1]) / len2))
+    return math.dist(p, (a[0] + ab[0] * t, a[1] + ab[1] * t))
+
+
+def convex_hull(points: list[list[float]]) -> list[tuple[float, float]]:
+    """Andrew's monotone chain."""
+    pts = sorted(set(map(tuple, points)))
+    if len(pts) < 3:
+        return pts
+    cross = lambda o, a, b: (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+    lower, upper = [], []
+    for p in pts:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    for p in reversed(pts):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    return lower[:-1] + upper[:-1]
+
+
+class Region:
+    """Mapped part of the campus: the convex hull of the selected buildings grown by a margin.
+
+    It is convex, so a straight segment enters and leaves it at most once; that makes clipping
+    a walkway a matter of finding where each segment crosses the border.
+    """
+
+    def __init__(self, points: list[list[float]], margin: float):
+        self.hull = convex_hull(points)
+        self.margin = margin
+
+    def contains(self, p: list[float]) -> bool:
+        n = len(self.hull)
+        if n >= 3 and contains([list(q) for q in self.hull], p):
+            return True
+        return min(segment_distance(p, self.hull[i], self.hull[(i + 1) % n]) for i in range(n)) <= self.margin
+
+    def _border(self, inside: list[float], outside: list[float]) -> list[float]:
+        for _ in range(30):  # bisection to ~1 mm
+            mid = [(inside[0] + outside[0]) / 2, (inside[1] + outside[1]) / 2]
+            if self.contains(mid):
+                inside = mid
+            else:
+                outside = mid
+        return inside
+
+    def clip_segment(self, p: list[float], q: list[float]) -> tuple[list[float], list[float]] | None:
+        steps = max(2, math.ceil(math.dist(p, q) / 2.0))  # sample every ~2 m
+        at = lambda k: [p[0] + (q[0] - p[0]) * k / steps, p[1] + (q[1] - p[1]) * k / steps]
+        flags = [self.contains(at(k)) for k in range(steps + 1)]
+        if not any(flags):
+            return None
+        first, last = flags.index(True), len(flags) - 1 - flags[::-1].index(True)
+        a = at(first) if first == 0 else self._border(at(first), at(first - 1))
+        b = at(last) if last == steps else self._border(at(last), at(last + 1))
+        return a, b
+
+    def clip(self, line: list[list[float]]) -> list[list[list[float]]]:
+        """Parts of a polyline inside the region (a polyline may leave and come back)."""
+        parts, current = [], []
+        for p, q in zip(line, line[1:]):
+            seg = self.clip_segment(p, q)
+            if seg is None:
+                if len(current) >= 2:
+                    parts.append(current)
+                current = []
+                continue
+            a, b = seg
+            if not current or math.dist(current[-1], a) > 1e-6:
+                if len(current) >= 2:
+                    parts.append(current)
+                current = [a]
+            current.append(b)
+            if math.dist(b, q) > 1e-6:  # left the region inside this segment
+                parts.append(current)
+                current = []
+        if len(current) >= 2:
+            parts.append(current)
+        return [[[round(x, 2), round(y, 2)] for x, y in part] for part in parts]
 
 
 def join_rings(ways: list[list[str]]) -> list[list[str]]:
@@ -198,18 +285,15 @@ def stop_kind(tags: dict) -> str | None:
     return None
 
 
-def find_stops(osm: Osm, buildings: list[dict]) -> list[dict]:
-    """Stops and metro entrances next to the campus buildings, one per stop."""
-    outlines = [p for b in buildings for p in b["outline"]]
-    xs, ys = [p[0] for p in outlines], [p[1] for p in outlines]
-    box = (min(xs) - STOP_MARGIN_M, min(ys) - STOP_MARGIN_M, max(xs) + STOP_MARGIN_M, max(ys) + STOP_MARGIN_M)
+def find_stops(osm: Osm, region: Region) -> list[dict]:
+    """Stops and metro entrances inside the mapped region, one per stop."""
     stops = []
     for ref, tags in osm.node_tags.items():
         is_stop = tags.get("public_transport") in ("platform", "stop_position", "station") \
             or tags.get("highway") == "bus_stop" or tags.get("railway") in ("tram_stop", "subway_entrance", "station")
         kind = stop_kind(tags) if is_stop else None
         pos = osm.node_pos(ref)
-        if not kind or not (box[0] <= pos[0] <= box[2] and box[1] <= pos[1] <= box[3]):
+        if not kind or not region.contains(pos):
             continue
         name = tags.get("name", "")
         if any(s["kind"] == kind and s["name"] == name and math.dist(s["pos"], pos) < STOP_MERGE_M for s in stops):
@@ -244,14 +328,10 @@ def main() -> int:
         print("None of the legend objects found in the extract", file=sys.stderr)
         return 1
 
-    # Keep walkways near the selected buildings only.
-    xs = [p[0] for b in buildings for p in b["outline"]]
-    ys = [p[1] for b in buildings for p in b["outline"]]
-    box = (min(xs) - FOOTWAY_MARGIN_M, min(ys) - FOOTWAY_MARGIN_M,
-           max(xs) + FOOTWAY_MARGIN_M, max(ys) + FOOTWAY_MARGIN_M)
-    inside = lambda p: box[0] <= p[0] <= box[2] and box[1] <= p[1] <= box[3]
-    footways = [w for w in osm.walkways if any(inside(p) for p in w)]
-    stops = find_stops(osm, buildings)
+    # Only the part of the campus around the selected buildings goes on the map.
+    region = Region([p for b in buildings for p in b["outline"]], REGION_MARGIN_M)
+    footways = [part for w in osm.walkways for part in region.clip(w)]
+    stops = find_stops(osm, region)
 
     extra = [json.loads(p.read_text(encoding="utf-8")) for p in args.extra]
     campus = {

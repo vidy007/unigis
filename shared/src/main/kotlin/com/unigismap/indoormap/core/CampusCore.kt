@@ -185,6 +185,9 @@ class CampusCore private constructor(handle: Long) : AutoCloseable {
         CampusMap(bounds, viewRotation, stops, footways)
     }
 
+    /** Legend rows for the campus map: only what is drawn on it. */
+    val legend: List<LegendItem> by lazy { legendOf(buildings, map.stops) }
+
     /** Building under ([x], [y]) campus meters, or null. */
     fun buildingAt(x: Float, y: Float): BuildingInfo? =
         NativeCore.buildingAt(handle, x, y).takeIf { it >= 0 }?.let(buildings::get)

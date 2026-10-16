@@ -9,6 +9,9 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
+import android.graphics.drawable.RotateDrawable
+import android.graphics.drawable.ShapeDrawable
+import android.graphics.drawable.shapes.OvalShape
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
@@ -26,9 +29,11 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import com.unigismap.indoormap.core.BuildingInfo
-import com.unigismap.indoormap.core.CampusColors
 import com.unigismap.indoormap.core.CampusCore
 import com.unigismap.indoormap.core.FloorRef
+
+/** Padding around the FAB column (dp) that leaves room for the buttons' elevation shadows. */
+private const val FAB_SHADOW = 8
 
 /**
  * Lite build of the UniGISMap app: the same app (same C++ core, shared Kotlin layer in shared/,
@@ -100,9 +105,11 @@ class MainActivity : Activity() {
         }
         val content = FrameLayout(this).apply {
             addView(campusMap, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-            addView(buildLegend(), FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.START).apply {
-                setMargins(dp(12), dp(12), dp(12), dp(12))
-            })
+            if (campusPlan.legend.isNotEmpty()) {
+                addView(buildLegend(), FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.START).apply {
+                    setMargins(dp(12), dp(12), dp(12), dp(12))
+                })
+            }
             addView(text(campusPlan.attribution, 11f, p.onSurfaceVariant),
                 FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.START).apply {
                     setMargins(dp(12), 0, dp(88), dp(4))
@@ -112,7 +119,7 @@ class MainActivity : Activity() {
             })
             addView(buildFabs(campusMap, "Показать весь кампус"),
                 FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.END).apply {
-                    setMargins(dp(16), dp(16), dp(16), dp(16))
+                    setMargins(dp(16 - FAB_SHADOW), dp(16 - FAB_SHADOW), dp(16 - FAB_SHADOW), dp(16 - FAB_SHADOW))
                 })
         }
         return LinearLayout(this).apply {
@@ -128,12 +135,7 @@ class MainActivity : Activity() {
         setPadding(dp(10), dp(8), dp(10), dp(8))
         background = rounded(p.surfaceContainer, 12f)
         elevation = dp(2).toFloat()
-        listOf(
-            CampusColors.ACADEMIC to "Учебные корпуса",
-            CampusColors.DORM to "Общежития",
-            CampusColors.FACILITY to "Объекты кампуса",
-            CampusColors.METRO to "Метро «Студенческая»",
-        ).forEachIndexed { i, (color, label) ->
+        campusPlan.legend.forEachIndexed { i, (color, label) ->
             addView(LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 setGravity(Gravity.CENTER_VERTICAL)
@@ -228,7 +230,7 @@ class MainActivity : Activity() {
                 setMargins(dp(16), dp(16), dp(88), dp(16))
             })
             addView(buildFabs(map, "Показать весь этаж"), FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.END).apply {
-                setMargins(dp(16), dp(16), dp(16), dp(16))
+                setMargins(dp(16 - FAB_SHADOW), dp(16 - FAB_SHADOW), dp(16 - FAB_SHADOW), dp(16 - FAB_SHADOW))
             })
         }
         val column = LinearLayout(this).apply {
@@ -299,10 +301,20 @@ class MainActivity : Activity() {
     private fun buildFabs(view: MapView, fitDescription: String): View = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setGravity(Gravity.CENTER_HORIZONTAL)
+        // Room for the elevation shadows: a parent hugging the buttons cuts them off.
+        setPadding(dp(FAB_SHADOW), dp(FAB_SHADOW), dp(FAB_SHADOW), dp(FAB_SHADOW))
         val compass = fab(R.drawable.ic_navigation, "Сбросить поворот", small = true) { view.animateResetRotation() }
-        // Needle points to the map's "north" (top edge of a plan, true north on the campus).
-        view.onCameraChanged = { compass.rotation = view.rotationDeg }
-        compass.rotation = view.rotationDeg
+        // Only the needle turns (to the map's "north": top edge of a plan, true north on the campus);
+        // rotating the whole button would tilt its rounded square and clip its corners.
+        val needle = RotateDrawable().apply {
+            drawable = getDrawable(R.drawable.ic_navigation)!!.mutate()
+            fromDegrees = 0f
+            toDegrees = 360f
+        }
+        compass.setImageDrawable(needle)
+        val pointNeedle = { needle.level = (((view.rotationDeg % 360f) + 360f) % 360f / 360f * 10000f).toInt() }
+        view.onCameraChanged = pointNeedle
+        pointNeedle()
         val items = listOf(
             compass,
             fab(R.drawable.ic_add, "Приблизить", small = true) { view.animateZoom(1.5f) },
@@ -528,7 +540,10 @@ class MainActivity : Activity() {
         setImageResource(icon)
         imageTintList = ColorStateList.valueOf(tint)
         contentDescription = desc
-        background = RippleDrawable(ColorStateList.valueOf((tint and 0x00FFFFFF) or 0x1F000000), null, null)
+        // Bounded ripple: a circle filling the whole 48dp button. Without a mask the ripple is drawn
+        // on the parent (top bar, card) and gets cut by its edges.
+        background = RippleDrawable(ColorStateList.valueOf((tint and 0x00FFFFFF) or 0x1F000000), null,
+            ShapeDrawable(OvalShape()))
         scaleType = ImageView.ScaleType.CENTER
         setOnClickListener { onClick() }
     }

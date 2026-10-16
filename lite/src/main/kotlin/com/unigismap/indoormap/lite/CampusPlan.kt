@@ -6,6 +6,7 @@ import android.graphics.RectF
 import com.unigismap.indoormap.core.BuildingInfo
 import com.unigismap.indoormap.core.CampusColors
 import com.unigismap.indoormap.core.CampusCore
+import com.unigismap.indoormap.core.LegendItem
 import com.unigismap.indoormap.core.MapPoint
 import com.unigismap.indoormap.core.StopKind
 
@@ -35,6 +36,8 @@ class CampusPlan(
     val buildings: List<CampusBuilding>,
     val stops: List<CampusStop>,
     val footways: List<Path>,
+    /** Only the kinds of buildings and stops that are on the map. */
+    val legend: List<LegendItem>,
     private val campus: CampusCore,
 ) {
     /** Building with floor plans under ([x], [y]); taps on the other buildings do nothing. */
@@ -59,6 +62,7 @@ class CampusPlan(
                 buildings = buildings,
                 stops = map.stops.map { CampusStop(it.name, it.kind, it.pos.toPointF()) },
                 footways = map.footways.map { it.toPath(close = false) },
+                legend = campus.legend,
                 campus = campus,
             )
         }

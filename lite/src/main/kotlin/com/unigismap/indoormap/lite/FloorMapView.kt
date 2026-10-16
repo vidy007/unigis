@@ -86,15 +86,6 @@ class FloorMapView(context: Context, private val plan: FloorPlan) : MapView(cont
             val c = toScreen(room.bounds.centerX(), room.bounds.centerY())
             canvas.drawText(room.name, c.x, c.y - (label.ascent() + label.descent()) / 2f, label)
         }
-
-        // "You are here" marker at the entrance.
-        val here = toScreen(plan.entrance.x, plan.entrance.y)
-        fill.color = (palette.primary and 0x00FFFFFF) or 0x33000000
-        canvas.drawCircle(here.x, here.y, 16f * density, fill)
-        fill.color = palette.surface
-        canvas.drawCircle(here.x, here.y, 8f * density, fill)
-        fill.color = palette.primary
-        canvas.drawCircle(here.x, here.y, 6f * density, fill)
     }
 
 }

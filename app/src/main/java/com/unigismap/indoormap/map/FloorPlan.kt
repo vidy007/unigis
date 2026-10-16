@@ -35,7 +35,6 @@ data class FloorPlan(
     val bounds: Rect,
     val rooms: List<Room>,
     val doors: List<Door>,
-    val entrance: Offset,
     val ref: FloorRef,
     private val campus: CampusCore,
 ) {
@@ -52,7 +51,6 @@ data class FloorPlan(
                 bounds = floor.bounds.toRect(),
                 rooms = floor.rooms.map { Room(it.id, it.name, it.category, it.bounds.toRect(), it.area) },
                 doors = floor.doors.map { Door(it.start.toOffset(), it.end.toOffset(), it.exterior) },
-                entrance = floor.youAreHere.toOffset(),
                 ref = ref,
                 campus = campus,
             )

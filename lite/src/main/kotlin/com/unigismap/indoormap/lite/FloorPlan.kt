@@ -25,7 +25,6 @@ class FloorPlan(
     val bounds: RectF,
     val rooms: List<Room>,
     val doors: List<Door>,
-    val entrance: PointF,
     val ref: FloorRef,
     private val campus: CampusCore,
 ) {
@@ -42,7 +41,6 @@ class FloorPlan(
                 bounds = floor.bounds.toRectF(),
                 rooms = floor.rooms.map { Room(it.id, it.name, it.category, it.bounds.toRectF(), it.area) },
                 doors = floor.doors.map { Door(it.start.toPointF(), it.end.toPointF(), it.exterior) },
-                entrance = floor.youAreHere.toPointF(),
                 ref = ref,
                 campus = campus,
             )

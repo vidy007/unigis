@@ -89,11 +89,5 @@ fun FloorMap(
             val center = state.toScreen(room.bounds.center)
             drawText(layout, topLeft = center - Offset(layout.size.width / 2f, layout.size.height / 2f))
         }
-
-        // "You are here" marker at the entrance.
-        val here = state.toScreen(plan.entrance)
-        drawCircle(colors.primary.copy(alpha = 0.2f), radius = 16.dp.toPx(), center = here)
-        drawCircle(colors.surface, radius = 8.dp.toPx(), center = here)
-        drawCircle(colors.primary, radius = 6.dp.toPx(), center = here)
     }
 }

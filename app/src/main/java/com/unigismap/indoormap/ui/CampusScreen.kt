@@ -95,7 +95,7 @@ fun CampusScreen(plan: CampusPlan, onOpenFloors: (BuildingInfo) -> Unit) {
                 modifier = Modifier.fillMaxSize(),
             )
 
-            Legend(Modifier.align(Alignment.TopStart).padding(12.dp))
+            if (plan.legend.isNotEmpty()) Legend(plan, Modifier.align(Alignment.TopStart).padding(12.dp))
 
             Text(
                 plan.attribution,
@@ -150,16 +150,11 @@ fun NumberBadge(text: String, color: Color, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun Legend(modifier: Modifier = Modifier) {
+private fun Legend(plan: CampusPlan, modifier: Modifier = Modifier) {
     Surface(modifier, shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 2.dp) {
         Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            listOf(
-                CampusColors.ACADEMIC to "Учебные корпуса",
-                CampusColors.DORM to "Общежития",
-                CampusColors.FACILITY to "Объекты кампуса",
-                CampusColors.METRO to "Метро «Студенческая»",
-            ).forEach { (color, label) ->
+            plan.legend.forEach { (color, label) ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.size(12.dp).clip(RoundedCornerShape(2.dp)).background(Color(color)))
                     Text(label, style = MaterialTheme.typography.labelMedium)
