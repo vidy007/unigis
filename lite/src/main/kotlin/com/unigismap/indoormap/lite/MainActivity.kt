@@ -15,7 +15,6 @@ import android.text.TextWatcher
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.inputmethod.InputMethodManager
@@ -26,20 +25,38 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.unigismap.indoormap.core.BuildingInfo
+import com.unigismap.indoormap.core.CampusColors
 import com.unigismap.indoormap.core.CampusCore
+import com.unigismap.indoormap.core.FloorRef
 
 /**
  * Lite build of the UniGISMap app: the same app (same C++ core, shared Kotlin layer in shared/,
  * same data and screens) with the Compose UI re-done in plain framework Views styled after
  * Material 3, so it builds without Google Maven (AndroidX / Compose / AGP).
- * Keep it in step with app/.../ui/MapScreen.kt when the app's screens change.
+ * Keep it in step with app/.../ui/ (CampusScreen.kt, MapScreen.kt) when the app's screens change.
+ *
+ * Screens: the campus map first; a building with floor plans opens its floors on top of it.
  */
 class MainActivity : Activity() {
 
-    private lateinit var plan: FloorPlan
+    private lateinit var campus: CampusCore
     private lateinit var p: Palette
+    private lateinit var root: FrameLayout
+
+    // ---- Campus screen ----
+    private lateinit var campusPlan: CampusPlan
+    private lateinit var campusScreen: View
+    private lateinit var campusMap: CampusMapView
+    private lateinit var buildingCard: LinearLayout
+    private lateinit var buildingTitle: TextView
+    private lateinit var buildingSubtitle: TextView
+
+    // ---- Floor screen (built when a building is opened) ----
+    private var floorScreen: View? = null
+    private var building: BuildingInfo? = null
+    private lateinit var plan: FloorPlan
     private lateinit var map: FloorMapView
-    private lateinit var compass: ImageButton
     private lateinit var card: LinearLayout
     private lateinit var cardTitle: TextView
     private lateinit var cardSubtitle: TextView
@@ -51,46 +68,15 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val campus = CampusCore.acquire(this)
-        plan = FloorPlan.of(campus, campus.defaultFloor())
+        campus = CampusCore.acquire(this)
+        campusPlan = CampusPlan.of(campus)
         p = Palette.from(this)
         setupWindow()
-
-        map = FloorMapView(this, plan).apply {
-            palette = p
-            onRoomClick = { selectRoom(it) }
-            onCameraChanged = { if (::compass.isInitialized) compass.rotation = rotationDeg }
-        }
-
-        val content = FrameLayout(this).apply {
-            addView(map, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-            addView(buildCard(), FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.START).apply {
-                setMargins(dp(16), dp(16), dp(88), dp(16))
-            })
-            addView(buildFabs(), FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.END).apply {
-                setMargins(dp(16), dp(16), dp(16), dp(16))
-            })
-        }
-
-        val column = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(buildTopBar(), LinearLayout.LayoutParams(MATCH_PARENT, dp(64)))
-            addView(content, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
-        }
-
-        scrim = View(this).apply {
-            setBackgroundColor(0x52000000)
-            alpha = 0f
-            visibility = View.GONE
-            setOnClickListener { closeSheet() }
-        }
-
-        val root = FrameLayout(this).apply {
+        campusScreen = buildCampusScreen()
+        root = FrameLayout(this).apply {
             fitsSystemWindows = true
             setBackgroundColor(p.surface)
-            addView(column, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-            addView(scrim, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-            addView(buildSheet(), FrameLayout.LayoutParams(MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.7f).toInt(), Gravity.BOTTOM))
+            addView(campusScreen, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
         setContentView(root)
     }
@@ -105,34 +91,223 @@ class MainActivity : Activity() {
         }
     }
 
+    // ---- Campus screen ----
+
+    private fun buildCampusScreen(): View {
+        campusMap = CampusMapView(this, campusPlan).apply {
+            palette = p
+            onBuildingClick = { selectBuilding(it) }
+        }
+        val content = FrameLayout(this).apply {
+            addView(campusMap, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(buildLegend(), FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.START).apply {
+                setMargins(dp(12), dp(12), dp(12), dp(12))
+            })
+            addView(text(campusPlan.attribution, 11f, p.onSurfaceVariant),
+                FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.START).apply {
+                    setMargins(dp(12), 0, dp(88), dp(4))
+                })
+            addView(buildBuildingCard(), FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.START).apply {
+                setMargins(dp(16), dp(16), dp(88), dp(24))
+            })
+            addView(buildFabs(campusMap, "Показать весь кампус"),
+                FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.END).apply {
+                    setMargins(dp(16), dp(16), dp(16), dp(16))
+                })
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(buildTopBar("Карта кампуса ${campusPlan.name}", onBack = null, onSearch = null),
+                LinearLayout.LayoutParams(MATCH_PARENT, dp(64)))
+            addView(content, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
+        }
+    }
+
+    private fun buildLegend(): View = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(10), dp(8), dp(10), dp(8))
+        background = rounded(p.surfaceContainer, 12f)
+        elevation = dp(2).toFloat()
+        listOf(
+            CampusColors.ACADEMIC to "Учебные корпуса",
+            CampusColors.DORM to "Общежития",
+            CampusColors.FACILITY to "Объекты кампуса",
+            CampusColors.METRO to "Метро «Студенческая»",
+        ).forEachIndexed { i, (color, label) ->
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setGravity(Gravity.CENTER_VERTICAL)
+                addView(View(context).apply { background = rounded(color, 2f) },
+                    LinearLayout.LayoutParams(dp(12), dp(12)).apply { marginEnd = dp(8) })
+                addView(text(label, 12f, p.onSurface, medium = true))
+            }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { if (i > 0) topMargin = dp(4) })
+        }
+    }
+
+    private fun buildBuildingCard(): View {
+        buildingTitle = text("", 16f, p.onSurface, medium = true)
+        buildingSubtitle = text("", 14f, p.onSurfaceVariant)
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            val texts = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(buildingTitle)
+                addView(buildingSubtitle)
+            }
+            addView(texts, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { topMargin = dp(12) })
+            addView(iconButton(R.drawable.ic_close, p.onSurfaceVariant, "Закрыть") { selectBuilding(null) },
+                LinearLayout.LayoutParams(dp(48), dp(48)))
+        }
+        val chips = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(chip("Планы этажей", R.drawable.ic_layers) { campusMap.selected?.let { openBuilding(it.info, 0) } },
+                LinearLayout.LayoutParams(WRAP_CONTENT, dp(32)).apply { marginEnd = dp(8) })
+            addView(chip("Показать", R.drawable.ic_center_focus) { campusMap.selected?.let { campusMap.animateFocus(it.bounds) } },
+                LinearLayout.LayoutParams(WRAP_CONTENT, dp(32)))
+        }
+        buildingCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), 0, dp(4), dp(12))
+            background = rounded(p.surfaceContainerLow, 12f)
+            elevation = dp(2).toFloat()
+            addView(header)
+            addView(chips, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(8) })
+            visibility = View.INVISIBLE
+            isClickable = true
+        }
+        return buildingCard
+    }
+
+    private fun selectBuilding(b: CampusBuilding?) {
+        campusMap.selected = b
+        if (b != null) {
+            buildingTitle.text = b.info.name
+            buildingSubtitle.text = buildString {
+                append(b.info.kind.title)
+                if (b.info.levels > 0) append(" · этажей: ${b.info.levels}")
+                append(" · планы: ${b.info.floorLevels.joinToString()} эт.")
+            }
+        }
+        showCard(buildingCard, b != null)
+    }
+
+    // ---- Floor screen ----
+
+    private fun openBuilding(info: BuildingInfo, floorIndex: Int) {
+        building = info
+        floorScreen?.let(root::removeView)
+        sheetOpen = false
+        plan = FloorPlan.of(campus, FloorRef(info.index, floorIndex.coerceIn(info.floors.indices)))
+        floorScreen = buildFloorScreen(info, floorIndex).also {
+            root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        }
+        campusScreen.visibility = View.GONE
+    }
+
+    private fun closeBuilding() {
+        floorScreen?.let(root::removeView)
+        floorScreen = null
+        building = null
+        sheetOpen = false
+        campusScreen.visibility = View.VISIBLE
+    }
+
+    private fun buildFloorScreen(info: BuildingInfo, floorIndex: Int): View {
+        map = FloorMapView(this, plan).apply {
+            palette = p
+            onRoomClick = { selectRoom(it) }
+        }
+        val content = FrameLayout(this).apply {
+            addView(map, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            if (info.floors.size > 1) {
+                addView(buildFloorChips(info, floorIndex), FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.START).apply {
+                    setMargins(dp(12), dp(12), dp(12), dp(12))
+                })
+            }
+            addView(buildCard(), FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.START).apply {
+                setMargins(dp(16), dp(16), dp(88), dp(16))
+            })
+            addView(buildFabs(map, "Показать весь этаж"), FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.END).apply {
+                setMargins(dp(16), dp(16), dp(16), dp(16))
+            })
+        }
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(buildTopBar(plan.name, onBack = ::closeBuilding, onSearch = ::openSheet), LinearLayout.LayoutParams(MATCH_PARENT, dp(64)))
+            addView(content, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
+        }
+        scrim = View(this).apply {
+            setBackgroundColor(0x52000000)
+            alpha = 0f
+            visibility = View.GONE
+            setOnClickListener { closeSheet() }
+        }
+        return FrameLayout(this).apply {
+            setBackgroundColor(p.surface)
+            addView(column, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(scrim, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(buildSheet(), FrameLayout.LayoutParams(MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.7f).toInt(), Gravity.BOTTOM))
+        }
+    }
+
+    /** Floor switcher: one chip per floor with a plan, the shown one filled. */
+    private fun buildFloorChips(info: BuildingInfo, current: Int): View = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        info.floorLevels.forEachIndexed { i, level ->
+            val selected = i == current
+            val chip = text("$level этаж", 14f, if (selected) p.onSecondaryContainer else p.onSurface, medium = true).apply {
+                gravity = Gravity.CENTER
+                setPadding(dp(16), 0, dp(16), 0)
+                background = ripple(
+                    rounded(if (selected) p.secondaryContainer else p.surfaceContainer, 8f,
+                        stroke = if (selected) null else p.outlineVariant),
+                    p.onSurface,
+                )
+                setOnClickListener { if (!selected) openBuilding(info, i) }
+            }
+            addView(chip, LinearLayout.LayoutParams(WRAP_CONTENT, dp(32)).apply { if (i > 0) marginStart = dp(8) })
+        }
+    }
+
     // ---- Top app bar ----
 
-    private fun buildTopBar(): View = FrameLayout(this).apply {
+    private fun buildTopBar(subtitle: String, onBack: (() -> Unit)?, onSearch: (() -> Unit)?): View = FrameLayout(this).apply {
         setBackgroundColor(p.surfaceContainer)
         val titles = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setGravity(Gravity.CENTER_HORIZONTAL)
             addView(text("UniGISMap", 22f, p.onSurface))
-            addView(text(plan.name, 12f, p.onSurfaceVariant, medium = true))
+            addView(text(subtitle, 12f, p.onSurfaceVariant, medium = true))
         }
         addView(titles, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.CENTER))
-        addView(
-            iconButton(R.drawable.ic_search, p.onSurfaceVariant, "Поиск помещения") { openSheet() },
-            FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER_VERTICAL or Gravity.END).apply { marginEnd = dp(4) },
-        )
+        if (onBack != null) {
+            addView(
+                iconButton(R.drawable.ic_arrow_back, p.onSurface, "К карте кампуса") { onBack() },
+                FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER_VERTICAL or Gravity.START).apply { marginStart = dp(4) },
+            )
+        }
+        if (onSearch != null) {
+            addView(
+                iconButton(R.drawable.ic_search, p.onSurfaceVariant, "Поиск помещения") { onSearch() },
+                FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER_VERTICAL or Gravity.END).apply { marginEnd = dp(4) },
+            )
+        }
     }
 
     // ---- FABs ----
 
-    private fun buildFabs(): View = LinearLayout(this).apply {
+    private fun buildFabs(view: MapView, fitDescription: String): View = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setGravity(Gravity.CENTER_HORIZONTAL)
-        compass = fab(R.drawable.ic_navigation, "Сбросить поворот", small = true) { map.animateResetRotation() }
+        val compass = fab(R.drawable.ic_navigation, "Сбросить поворот", small = true) { view.animateResetRotation() }
+        // Needle points to the map's "north" (top edge of a plan, true north on the campus).
+        view.onCameraChanged = { compass.rotation = view.rotationDeg }
+        compass.rotation = view.rotationDeg
         val items = listOf(
             compass,
-            fab(R.drawable.ic_add, "Приблизить", small = true) { map.animateZoom(1.5f) },
-            fab(R.drawable.ic_remove, "Отдалить", small = true) { map.animateZoom(1 / 1.5f) },
-            fab(R.drawable.ic_center_focus, "Показать весь этаж", small = false) { map.animateFit() },
+            fab(R.drawable.ic_add, "Приблизить", small = true) { view.animateZoom(1.5f) },
+            fab(R.drawable.ic_remove, "Отдалить", small = true) { view.animateZoom(1 / 1.5f) },
+            fab(R.drawable.ic_center_focus, fitDescription, small = false) { view.animateFit() },
         )
         items.forEachIndexed { i, v ->
             val size = if (i == items.lastIndex) dp(56) else dp(40)
@@ -165,24 +340,14 @@ class MainActivity : Activity() {
             addView(texts, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { topMargin = dp(12) })
             addView(iconButton(R.drawable.ic_close, p.onSurfaceVariant, "Закрыть") { selectRoom(null) }, LinearLayout.LayoutParams(dp(48), dp(48)))
         }
-        val chip = text("Показать на карте", 14f, p.onSurface, medium = true).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            val icon = getDrawable(R.drawable.ic_center_focus)!!.mutate()
-            icon.setTint(p.primary)
-            icon.setBounds(0, 0, dp(18), dp(18))
-            setCompoundDrawables(icon, null, null, null)
-            compoundDrawablePadding = dp(8)
-            setPadding(dp(8), 0, dp(16), 0)
-            background = ripple(rounded(Color.TRANSPARENT, 8f, stroke = p.outlineVariant), p.onSurface)
-            setOnClickListener { map.selectedRoom?.let(map::animateFocus) }
-        }
+        val focus = chip("Показать на карте", R.drawable.ic_center_focus) { map.selectedRoom?.let { map.animateFocus(it.bounds) } }
         card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), 0, dp(4), dp(12))
             background = rounded(p.surfaceContainerLow, 12f)
             elevation = dp(2).toFloat()
             addView(header)
-            addView(chip, LinearLayout.LayoutParams(WRAP_CONTENT, dp(32)).apply { topMargin = dp(8) })
+            addView(focus, LinearLayout.LayoutParams(WRAP_CONTENT, dp(32)).apply { topMargin = dp(8) })
             visibility = View.INVISIBLE
             isClickable = true
         }
@@ -194,14 +359,20 @@ class MainActivity : Activity() {
         if (room != null) {
             cardTitle.text = room.name
             cardSubtitle.text = subtitle(room)
-            if (card.visibility != View.VISIBLE) {
-                card.visibility = View.VISIBLE
-                card.translationY = dp(200).toFloat()
-                card.animate().translationY(0f).setDuration(250).start()
+        }
+        showCard(card, room != null)
+    }
+
+    private fun showCard(view: View, show: Boolean) {
+        if (show) {
+            if (view.visibility != View.VISIBLE) {
+                view.visibility = View.VISIBLE
+                view.translationY = dp(200).toFloat()
+                view.animate().translationY(0f).setDuration(250).start()
             }
-        } else if (card.visibility == View.VISIBLE) {
-            card.animate().translationY(dp(200).toFloat()).setDuration(200)
-                .withEndAction { card.visibility = View.INVISIBLE }.start()
+        } else if (view.visibility == View.VISIBLE) {
+            view.animate().translationY(dp(200).toFloat()).setDuration(200)
+                .withEndAction { view.visibility = View.INVISIBLE }.start()
         }
     }
 
@@ -272,7 +443,7 @@ class MainActivity : Activity() {
         setOnClickListener {
             closeSheet()
             selectRoom(room)
-            map.animateFocus(room)
+            map.animateFocus(room.bounds)
         }
     }
 
@@ -300,8 +471,10 @@ class MainActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         when {
-            sheetOpen -> closeSheet()
-            map.selectedRoom != null -> selectRoom(null)
+            building != null && sheetOpen -> closeSheet()
+            building != null && map.selectedRoom != null -> selectRoom(null)
+            building != null -> closeBuilding()
+            campusMap.selected != null -> selectBuilding(null)
             else -> @Suppress("DEPRECATION") super.onBackPressed()
         }
     }
@@ -322,6 +495,19 @@ class MainActivity : Activity() {
         setTextColor(color)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
         if (medium) typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+    }
+
+    /** Outlined assist chip with a leading icon. */
+    private fun chip(label: String, icon: Int, onClick: () -> Unit) = text(label, 14f, p.onSurface, medium = true).apply {
+        gravity = Gravity.CENTER_VERTICAL
+        val d = getDrawable(icon)!!.mutate()
+        d.setTint(p.primary)
+        d.setBounds(0, 0, dp(18), dp(18))
+        setCompoundDrawables(d, null, null, null)
+        compoundDrawablePadding = dp(8)
+        setPadding(dp(8), 0, dp(16), 0)
+        background = ripple(rounded(Color.TRANSPARENT, 8f, stroke = p.outlineVariant), p.onSurface)
+        setOnClickListener { onClick() }
     }
 
     private fun rounded(color: Int, radiusDp: Float, stroke: Int? = null) = GradientDrawable().apply {
@@ -346,5 +532,4 @@ class MainActivity : Activity() {
         scaleType = ImageView.ScaleType.CENTER
         setOnClickListener { onClick() }
     }
-
 }

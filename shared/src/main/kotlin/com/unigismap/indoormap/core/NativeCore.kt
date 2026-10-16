@@ -16,10 +16,12 @@ object NativeCore {
     external fun loadCampus(json: String): Long
     external fun releaseCampus(handle: Long)
     external fun campusInfo(handle: Long): Array<String>
+    external fun campusGeometry(handle: Long): FloatArray
+    external fun buildingAt(handle: Long, x: Float, y: Float): Int
     external fun buildingCount(handle: Long): Int
     external fun buildingStrings(handle: Long, building: Int): Array<String>
     external fun buildingLevels(handle: Long, building: Int): IntArray
-    external fun buildingOutline(handle: Long, building: Int): FloatArray
+    external fun buildingGeometry(handle: Long, building: Int): FloatArray
     external fun floorStrings(handle: Long, building: Int, floor: Int): Array<String>?
     external fun floorGeometry(handle: Long, building: Int, floor: Int): FloatArray?
     external fun roomAt(handle: Long, building: Int, floor: Int, x: Float, y: Float): Int
@@ -38,7 +40,8 @@ object NativeCore {
     const val CAMERA_OFFSET_Y = 3
 
     external fun cameraStateSize(): Int
-    external fun cameraInit(state: FloatArray, left: Float, top: Float, right: Float, bottom: Float)
+    /** [rotation]: home view angle in degrees, where fit and reset-rotation return (0 = north up). */
+    external fun cameraInit(state: FloatArray, left: Float, top: Float, right: Float, bottom: Float, rotation: Float)
     external fun cameraViewport(state: FloatArray, width: Float, height: Float)
     external fun cameraGesture(
         state: FloatArray, centroidX: Float, centroidY: Float, panX: Float, panY: Float, zoom: Float, rotation: Float,

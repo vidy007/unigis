@@ -123,6 +123,21 @@ struct Polygon {
         return inside;
     }
 
+    /**
+     * A point inside the polygon for labels and route anchors: the bounds center if inside,
+     * else the vertex mean if inside, else the first vertex nudged toward the mean.
+     */
+    Vec2 interiorPoint() const {
+        if (points.empty()) return {};
+        const Vec2 c = bounds().center();
+        if (contains(c)) return c;
+        Vec2 sum;
+        for (const Vec2& p : points) sum = sum + p;
+        const Vec2 mean = sum / static_cast<float>(points.size());
+        if (contains(mean)) return mean;
+        return points.front() + (mean - points.front()) * 0.1f;
+    }
+
     /** Distance from [p] to the polygon outline. */
     float distanceToEdge(Vec2 p) const {
         float best = INFINITY;
@@ -257,6 +272,16 @@ struct Floor {
     int roomAt(Vec2 p) const;
 };
 
+/**
+ * What a building is on the campus map, as in the legend of the printed NSTU map.
+ * Keep the order in sync with the Kotlin `BuildingKind` enum: the ordinal crosses JNI.
+ */
+enum class BuildingKind : int {
+    Academic = 0,  // учебный корпус
+    Dorm = 1,      // общежитие
+    Facility = 2,  // центр культуры, спорт, библиотека, поликлиника...
+};
+
 /** Building entrance in campus meters. */
 struct Entrance {
     std::string id;
@@ -268,11 +293,14 @@ struct Building {
     std::string id;
     std::string name;
     std::string shortName;
+    BuildingKind kind = BuildingKind::Academic;
+    std::string number;  // badge on the campus map: "1", "3a"...; may be empty
     int levels = 0;
     float floorHeight = 3.6f;
     bool placeholder = false;  // floor data is a stand-in, not a surveyed plan
     Frame frame;               // floor-local -> campus meters
-    Polygon outline;           // campus meters
+    Polygon outline;           // campus meters; empty for buildings that are not georeferenced
+    Vec2 labelPos;             // inside the outline, where the badge goes
     std::vector<Entrance> entrances;
     std::vector<Floor> floors;  // sorted by level
 
@@ -282,6 +310,17 @@ struct Building {
 /** Outdoor walkway polyline in campus meters. */
 struct Footway {
     std::vector<Vec2> points;
+};
+
+/** Keep the order in sync with the Kotlin `StopKind` enum: the ordinal crosses JNI. */
+enum class StopKind : int { Bus = 0, Tram = 1, Metro = 2 };
+
+/** Public transport stop (or metro entrance) in campus meters. */
+struct Stop {
+    std::string id;
+    std::string name;
+    StopKind kind = StopKind::Bus;
+    Vec2 pos;
 };
 
 /**
@@ -295,8 +334,14 @@ struct Campus {
     double originLon = 0.0;
     std::vector<Building> buildings;
     std::vector<Footway> footways;
+    std::vector<Stop> stops;
+    float viewRotation = 0.f;  // map angle that matches the printed campus map (degrees, clockwise)
 
     int buildingIndex(std::string_view id) const;
+    /** Index of the building whose outline contains [p] (the smallest one if nested); -1 if none. */
+    int buildingAt(Vec2 p) const;
+    /** Extent of all building outlines and stops; empty if there are none. */
+    Rect bounds() const;
 };
 
 /** Parses the campus JSON format (see assets/campus.json). Throws std::runtime_error on bad data. */
@@ -420,6 +465,7 @@ enum Field : int {
     AnimRotationDelta,
     AnimTargetX,
     AnimTargetY,
+    HomeRotation,  // the "unrotated" view: fit and reset-rotation return to it
     Count,
 };
 }  // namespace cam
@@ -429,7 +475,8 @@ class Camera {
 public:
     explicit Camera(float* state) : s_(state) {}
 
-    static void init(float* state, const Rect& plan);
+    /** [homeRotation] is the default view angle, e.g. to show a campus as on its printed map. */
+    static void init(float* state, const Rect& plan, float homeRotation = 0.f);
 
     float scale() const { return s_[cam::Scale]; }
     float rotation() const { return s_[cam::Rotation]; }
@@ -461,7 +508,9 @@ private:
     float minScale() const { return s_[cam::FitScale] * 0.5f; }
     float maxScale() const { return s_[cam::FitScale] * 12.f; }
 
-    float computeFitScale(const Rect& bounds) const;
+    float homeRotation() const { return s_[cam::HomeRotation]; }
+    /** Scale that fits [bounds] into the viewport when shown at [rotation]. */
+    float computeFitScale(const Rect& bounds, float rotation) const;
     void setCamera(Vec2 centerWorld, float scale, float rotation);
     void prepare(Vec2 targetCenter, float targetScale, float targetRotation);
 };

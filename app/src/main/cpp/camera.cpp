@@ -2,7 +2,7 @@
 
 namespace unigismap {
 
-void Camera::init(float* state, const Rect& plan) {
+void Camera::init(float* state, const Rect& plan, float homeRotation) {
     std::fill(state, state + cam::Count, 0.f);
     state[cam::Scale] = 1.f;
     state[cam::FitScale] = 1.f;
@@ -10,13 +10,20 @@ void Camera::init(float* state, const Rect& plan) {
     state[cam::PlanT] = plan.top;
     state[cam::PlanR] = plan.right;
     state[cam::PlanB] = plan.bottom;
+    state[cam::HomeRotation] = normalizeDegrees(homeRotation);
+    state[cam::Rotation] = state[cam::HomeRotation];
 }
 
-float Camera::computeFitScale(const Rect& bounds) const {
+float Camera::computeFitScale(const Rect& bounds, float rotation) const {
     const float w = s_[cam::ViewportW];
     const float h = s_[cam::ViewportH];
     if (w <= 0.f || h <= 0.f || bounds.empty()) return 1.f;
-    return std::min(w / bounds.width(), h / bounds.height()) * 0.9f;
+    // Extent of the rotated rectangle on screen.
+    const float rad = rotation * static_cast<float>(M_PI) / 180.f;
+    const float c = std::fabs(std::cos(rad)), s = std::fabs(std::sin(rad));
+    const float bw = bounds.width() * c + bounds.height() * s;
+    const float bh = bounds.width() * s + bounds.height() * c;
+    return std::min(w / bw, h / bh) * 0.9f;
 }
 
 void Camera::setCamera(Vec2 centerWorld, float scale, float rotation) {
@@ -28,7 +35,7 @@ void Camera::setCamera(Vec2 centerWorld, float scale, float rotation) {
 void Camera::onViewportChanged(float width, float height) {
     const bool first = s_[cam::ViewportW] == 0.f && s_[cam::ViewportH] == 0.f;
     set(cam::ViewportW, cam::ViewportH, {width, height});
-    s_[cam::FitScale] = computeFitScale(plan());
+    s_[cam::FitScale] = computeFitScale(plan(), homeRotation());
     if (first) fitToScreen();
     else setCamera(plan().center(), scale(), rotation());
 }
@@ -41,7 +48,7 @@ void Camera::onGesture(Vec2 centroid, Vec2 pan, float zoom, float rotationDelta)
     s_[cam::Rotation] = normalizeDegrees(rotation() + rotationDelta);
 }
 
-void Camera::fitToScreen() { setCamera(plan().center(), s_[cam::FitScale], 0.f); }
+void Camera::fitToScreen() { setCamera(plan().center(), s_[cam::FitScale], homeRotation()); }
 
 void Camera::prepare(Vec2 targetCenter, float targetScale, float targetRotation) {
     set(cam::AnimStartX, cam::AnimStartY, toWorld(viewportCenter()));
@@ -61,9 +68,9 @@ void Camera::step(float t) {
               normalizeDegrees(s_[cam::AnimStartRotation] + s_[cam::AnimRotationDelta] * t));
 }
 
-void Camera::prepareFit() { prepare(plan().center(), s_[cam::FitScale], 0.f); }
+void Camera::prepareFit() { prepare(plan().center(), s_[cam::FitScale], homeRotation()); }
 
-void Camera::prepareResetRotation() { prepare(toWorld(viewportCenter()), scale(), 0.f); }
+void Camera::prepareResetRotation() { prepare(toWorld(viewportCenter()), scale(), homeRotation()); }
 
 void Camera::prepareZoom(float factor, Vec2 pivot) {
     const float target = std::clamp(scale() * factor, minScale(), maxScale());
@@ -74,7 +81,7 @@ void Camera::prepareZoom(float factor, Vec2 pivot) {
 }
 
 void Camera::prepareFocus(const Rect& target) {
-    const float fit = std::min(std::max(scale(), computeFitScale(target.inflated(3.f))), maxScale());
+    const float fit = std::min(std::max(scale(), computeFitScale(target.inflated(3.f), rotation())), maxScale());
     prepare(target.center(), fit, rotation());
 }
 

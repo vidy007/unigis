@@ -1,0 +1,50 @@
+{
+  "_comment": [
+    "Legend of the printed NSTU campus map (Карта кампуса): every object on it and how to find it in OSM.",
+    "kind: academic (green badges), dorm (orange), facility (blue). number: the badge text.",
+    "osm: exact object (way/N or relation/N), wins over match. match: tag -> regex (all must match),",
+    "or a list of such dicts (any may match); tags of POI nodes inside a building count for that building.",
+    "count: how many objects to take (default 1). optional: no warning when nothing matches.",
+    "floors: file next to this one with the building's frame and floor plans (only корпус 4 has them).",
+    "viewRotation: the printed map is not north-up; ул. Новогодняя is on top. Derived from корпус 4",
+    "(its long side horizontal, above корпус 2), in degrees clockwise as used by the camera."
+  ],
+  "viewRotation": -134,
+  "objects": [
+    {"id": "k1", "kind": "academic", "number": "1", "name": "Корпус 1", "osm": "way/36136717"},
+    {"id": "k2", "kind": "academic", "number": "2", "name": "Корпус 2", "osm": "way/161629651"},
+    {"id": "k3a", "kind": "academic", "number": "3a", "name": "Корпус 3а", "optional": true,
+     "match": {"addr:street": "Карла Маркса", "addr:housenumber": "^20\\s*к\\s*3\\s*[аa]$"}},
+    {"id": "k3b", "kind": "academic", "number": "3b", "name": "Корпус 3б", "optional": true,
+     "match": {"addr:street": "Карла Маркса", "addr:housenumber": "^20\\s*к\\s*3\\s*[бb]$"}},
+    {"id": "k3", "kind": "academic", "number": "3a/3b", "name": "Корпус 3", "optional": true, "osm": "way/51992784"},
+    {"id": "k4", "kind": "academic", "number": "4", "name": "Корпус 4", "osm": "way/41849092", "floors": "k4_floors.json"},
+    {"id": "k5", "kind": "academic", "number": "5", "name": "Корпус 5", "osm": "way/48914974"},
+    {"id": "k6", "kind": "academic", "number": "6", "name": "Корпус 6", "osm": "way/41849085"},
+    {"id": "k7", "kind": "academic", "number": "7", "name": "Корпус 7",
+     "match": [{"addr:street": "Карла Маркса", "addr:housenumber": "^20\\s*к\\s*7$"},
+               {"name": "(?i)\\bкорпус\\s*№?\\s*7\\b"}]},
+    {"id": "k8", "kind": "academic", "number": "8", "name": "Корпус 8", "osm": "way/51992789"},
+
+    {"id": "d1", "kind": "dorm", "number": "1", "name": "Общежитие № 1", "match": {"name": "(?i)общежити\\D*№?\\s*1(?!\\d)"}},
+    {"id": "d2", "kind": "dorm", "number": "2", "name": "Общежитие № 2", "match": {"name": "(?i)общежити\\D*№?\\s*2(?!\\d)"}},
+    {"id": "d3", "kind": "dorm", "number": "3", "name": "Общежитие № 3", "match": {"name": "(?i)общежити\\D*№?\\s*3(?!\\d)"}},
+    {"id": "d4", "kind": "dorm", "number": "4", "name": "Общежитие № 4", "match": {"name": "(?i)общежити\\D*№?\\s*4(?!\\d)"}},
+    {"id": "d5", "kind": "dorm", "number": "5", "name": "Общежитие № 5", "match": {"name": "(?i)общежити\\D*№?\\s*5(?!\\d)"}},
+    {"id": "d6", "kind": "dorm", "number": "6", "name": "Общежитие № 6", "match": {"name": "(?i)общежити\\D*№?\\s*6(?!\\d)"}},
+    {"id": "d7", "kind": "dorm", "number": "7", "name": "Общежитие № 7", "match": {"name": "(?i)общежити\\D*№?\\s*7(?!\\d)"}},
+    {"id": "d8", "kind": "dorm", "number": "8", "name": "Общежитие № 8", "match": {"name": "(?i)общежити\\D*№?\\s*8(?!\\d)"}},
+
+    {"id": "f1", "kind": "facility", "number": "1", "name": "Центр культуры",
+     "match": {"name": "(?i)центр культуры|дом культуры"}},
+    {"id": "f2", "kind": "facility", "number": "2", "name": "Дворец спорта", "match": {"name": "(?i)дворец спорта"}},
+    {"id": "f3", "kind": "facility", "number": "3", "name": "Спортивный комплекс, бассейн",
+     "match": [{"name": "(?i)бассейн|спортивный комплекс"}, {"leisure": "^swimming_pool$", "building": "."}]},
+    {"id": "f4", "kind": "facility", "number": "4", "name": "Спортивная площадка", "count": 2,
+     "match": {"leisure": "^(pitch|stadium|track)$"}},
+    {"id": "f5", "kind": "facility", "number": "5", "name": "Научная библиотека", "match": {"name": "(?i)библиотек"}},
+    {"id": "f6", "kind": "facility", "number": "6", "name": "Поликлиника", "match": {"name": "(?i)поликлиник"}},
+    {"id": "f7", "kind": "facility", "number": "7", "name": "Бизнес-инкубатор «Гараж», боулинг-центр «Фотон»",
+     "short": "«Гараж», «Фотон»", "match": {"name": "(?i)гараж»?|фотон|бизнес-инкубатор"}}
+  ]
+}

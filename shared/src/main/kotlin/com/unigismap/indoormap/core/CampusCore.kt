@@ -18,6 +18,20 @@ enum class RoomCategory(val title: String) {
     CORRIDOR("Коридор"),
 }
 
+/** Order must match unigismap::BuildingKind in unigismap.hpp: the ordinal crosses JNI. */
+enum class BuildingKind(val title: String) {
+    ACADEMIC("Учебный корпус"),
+    DORM("Общежитие"),
+    FACILITY("Объект кампуса"),
+}
+
+/** Order must match unigismap::StopKind in unigismap.hpp: the ordinal crosses JNI. */
+enum class StopKind(val title: String) {
+    BUS("Автобусная остановка"),
+    TRAM("Трамвайная остановка"),
+    METRO("Метро"),
+}
+
 /** Point in meters. */
 data class MapPoint(val x: Float, val y: Float)
 
@@ -51,18 +65,42 @@ data class FloorInfo(
     val doors: List<DoorInfo>,
 )
 
+data class EntranceInfo(val pos: MapPoint, val main: Boolean)
+
 data class BuildingInfo(
     val index: Int,
     val id: String,
     val name: String,
     val shortName: String,
+    val kind: BuildingKind,
+    /** Badge on the campus map ("1", "3a"...); may be empty. */
+    val number: String,
     val levels: Int,
     /** Floor data is a stand-in, not a surveyed plan. */
     val placeholder: Boolean,
     /** Levels that have floor plans, ascending. */
     val floorLevels: List<Int>,
-    /** Footprint in campus meters (x east, y south). */
+    /** Footprint in campus meters (x east, y south); empty if the building is not georeferenced. */
     val outline: List<MapPoint>,
+    /** Inside the outline, where the badge goes. */
+    val labelPos: MapPoint,
+    val entrances: List<EntranceInfo>,
+) {
+    /** Floors that have plans, as refs for [CampusCore.floor]. */
+    val floors: List<FloorRef> get() = floorLevels.indices.map { FloorRef(index, it) }
+}
+
+data class StopInfo(val id: String, val name: String, val kind: StopKind, val pos: MapPoint)
+
+/** Everything drawn on the campus map besides buildings, in campus meters. */
+data class CampusMap(
+    /** Extent of all building outlines and stops. */
+    val bounds: MapRect,
+    /** View angle (degrees, clockwise) that matches the printed campus map; 0 = north up. */
+    val viewRotation: Float,
+    val stops: List<StopInfo>,
+    /** Walkways and streets as polylines. */
+    val footways: List<List<MapPoint>>,
 )
 
 /** One map segment of a route: a building floor, or outdoors when [floor] is null. */
@@ -86,11 +124,13 @@ class CampusCore private constructor(handle: Long) : AutoCloseable {
 
     val name: String
     val attribution: String
+    private val stopStrings: List<String>
 
     init {
         val info = NativeCore.campusInfo(handle)
         name = info[0]
         attribution = info[1]
+        stopStrings = info.drop(2)
     }
 
     /** Frees the native campus and walking graph. Safe to call more than once. */
@@ -107,26 +147,49 @@ class CampusCore private constructor(handle: Long) : AutoCloseable {
         List(NativeCore.buildingCount(handle)) { b ->
             val s = NativeCore.buildingStrings(handle, b)
             val levels = NativeCore.buildingLevels(handle, b)
-            val outline = NativeCore.buildingOutline(handle, b)
+            val g = NativeCore.buildingGeometry(handle, b)
+            var i = 0
+            fun next() = g[i++]
+            val labelPos = MapPoint(next(), next())
+            val outline = List(next().toInt()) { MapPoint(next(), next()) }
+            val entrances = List(next().toInt()) { EntranceInfo(MapPoint(next(), next()), main = next() != 0f) }
             BuildingInfo(
                 index = b,
                 id = s[0],
                 name = s[1],
                 shortName = s[2],
+                kind = BuildingKind.entries[levels[2]],
+                number = s[3],
                 levels = levels[0],
                 placeholder = levels[1] != 0,
-                floorLevels = levels.drop(2),
-                outline = List(outline.size / 2) { MapPoint(outline[2 * it], outline[2 * it + 1]) },
+                floorLevels = levels.drop(3),
+                outline = outline,
+                labelPos = labelPos,
+                entrances = entrances,
             )
         }
     }
 
-    private val floors = HashMap<FloorRef, FloorInfo>()
+    /** Stops, walkways and the extent of the campus map. */
+    val map: CampusMap by lazy {
+        val g = NativeCore.campusGeometry(handle)
+        var i = 0
+        fun next() = g[i++]
+        val bounds = MapRect(next(), next(), next(), next())
+        val viewRotation = next()
+        val stops = List(next().toInt()) { s ->
+            val kind = StopKind.entries[next().toInt()]
+            StopInfo(stopStrings[2 * s], stopStrings[2 * s + 1], kind, MapPoint(next(), next()))
+        }
+        val footways = List(next().toInt()) { List(next().toInt()) { MapPoint(next(), next()) } }
+        CampusMap(bounds, viewRotation, stops, footways)
+    }
 
-    /** First floor of the first building that has floor plans. */
-    fun defaultFloor(): FloorRef =
-        requireNotNull(buildings.firstOrNull { it.floorLevels.isNotEmpty() }) { "campus.json has no floor plans" }
-            .let { FloorRef(it.index, 0) }
+    /** Building under ([x], [y]) campus meters, or null. */
+    fun buildingAt(x: Float, y: Float): BuildingInfo? =
+        NativeCore.buildingAt(handle, x, y).takeIf { it >= 0 }?.let(buildings::get)
+
+    private val floors = HashMap<FloorRef, FloorInfo>()
 
     fun floor(ref: FloorRef): FloorInfo = synchronized(floors) { floors.getOrPut(ref) { decodeFloor(ref) } }
 

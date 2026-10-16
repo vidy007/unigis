@@ -38,15 +38,26 @@ RoomCategory readCategory(const std::string& s) {
     bad("unknown room category '" + s + "'");
 }
 
-/** Visual centroid is overkill for now: bounds center if inside the shape, else the first vertex nudged inward. */
-Vec2 pickAnchor(const Polygon& shape, const Rect& bounds) {
-    const Vec2 c = bounds.center();
-    if (shape.contains(c)) return c;
-    Vec2 sum;
-    for (const auto& p : shape.points) sum = sum + p;
-    const Vec2 mean = sum / static_cast<float>(shape.points.size());
-    if (shape.contains(mean)) return mean;
-    return shape.points.front() + (mean - shape.points.front()) * 0.1f;
+BuildingKind readBuildingKind(const std::string& s, const std::string& where) {
+    if (s == "academic") return BuildingKind::Academic;
+    if (s == "dorm") return BuildingKind::Dorm;
+    if (s == "facility") return BuildingKind::Facility;
+    bad(where + ": unknown building kind '" + s + "'");
+}
+
+Stop readStop(const Value& v) {
+    Stop st;
+    st.id = v["id"].asString();
+    if (st.id.empty()) bad("stop without id");
+    const std::string here = "stop " + st.id;
+    st.name = v["name"].asString();
+    const std::string kind = v["kind"].asString("bus");
+    if (kind == "bus") st.kind = StopKind::Bus;
+    else if (kind == "tram") st.kind = StopKind::Tram;
+    else if (kind == "metro") st.kind = StopKind::Metro;
+    else bad(here + ": unknown kind '" + kind + "'");
+    st.pos = readPoint(v["pos"], here);
+    return st;
 }
 
 Room readRoom(const Value& v, const std::string& where) {
@@ -60,7 +71,7 @@ Room readRoom(const Value& v, const std::string& where) {
     else r.shape = Polygon::fromRect(readRect(v["rect"], here));
     r.bounds = r.shape.bounds();
     r.area = r.shape.area();
-    r.anchor = v.has("anchor") ? readPoint(v["anchor"], here) : pickAnchor(r.shape, r.bounds);
+    r.anchor = v.has("anchor") ? readPoint(v["anchor"], here) : r.shape.interiorPoint();
     return r;
 }
 
@@ -102,15 +113,20 @@ Building readBuilding(const Value& v) {
     if (b.id.empty()) bad("building without id");
     b.name = v["name"].asString(b.id);
     b.shortName = v["short"].asString(b.name);
+    const std::string here = "building " + b.id;
+    b.kind = readBuildingKind(v["kind"].asString("academic"), here);
+    b.number = v["number"].asString();
     b.levels = v["levels"].asInt(0);
     b.floorHeight = v["floorHeight"].asFloat(3.6f);
     b.placeholder = v["placeholder"].asBool(false);
-    const std::string here = "building " + b.id;
     if (v.has("frame")) {
         b.frame.origin = readPoint(v["frame"]["origin"], here + " frame");
         b.frame.rotation = v["frame"]["rotation"].asFloat(0.f);
     }
-    if (v.has("outline")) b.outline = readPolygon(v["outline"], here + " outline");
+    if (v.has("outline")) {
+        b.outline = readPolygon(v["outline"], here + " outline");
+        b.labelPos = v.has("label") ? readPoint(v["label"], here + " label") : b.outline.interiorPoint();
+    }
     for (const auto& e : v["entrances"].items()) {
         Entrance en;
         en.id = e["id"].asString();
@@ -143,6 +159,25 @@ int Building::floorIndex(int level) const {
     return -1;
 }
 
+int Campus::buildingAt(Vec2 p) const {
+    int best = -1;
+    float bestArea = INFINITY;
+    for (size_t i = 0; i < buildings.size(); ++i) {
+        const Polygon& outline = buildings[i].outline;
+        if (outline.points.empty() || !outline.contains(p)) continue;
+        const float a = outline.area();
+        if (a < bestArea) { bestArea = a; best = static_cast<int>(i); }
+    }
+    return best;
+}
+
+Rect Campus::bounds() const {
+    std::vector<Vec2> points;
+    for (const Building& b : buildings) points.insert(points.end(), b.outline.points.begin(), b.outline.points.end());
+    for (const Stop& s : stops) points.push_back(s.pos);
+    return Polygon{points}.bounds();
+}
+
 int Campus::buildingIndex(std::string_view id) const {
     for (size_t i = 0; i < buildings.size(); ++i) {
         if (buildings[i].id == id) return static_cast<int>(i);
@@ -158,12 +193,14 @@ Campus loadCampus(std::string_view text) {
     c.attribution = root["attribution"].asString("");
     c.originLat = root["origin"]["lat"].asNumber();
     c.originLon = root["origin"]["lon"].asNumber();
+    c.viewRotation = root["viewRotation"].asFloat(0.f);
     for (const auto& b : root["buildings"].items()) c.buildings.push_back(readBuilding(b));
     for (const auto& w : root["footways"].items()) {
         Footway fw;
         for (const auto& p : w.items()) fw.points.push_back(readPoint(p, "footway"));
         if (fw.points.size() >= 2) c.footways.push_back(std::move(fw));
     }
+    for (const auto& st : root["stops"].items()) c.stops.push_back(readStop(st));
     return c;
 }
 

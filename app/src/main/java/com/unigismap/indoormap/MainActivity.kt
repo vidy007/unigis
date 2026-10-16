@@ -5,8 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.unigismap.indoormap.core.CampusCore
-import com.unigismap.indoormap.map.FloorPlan
-import com.unigismap.indoormap.ui.MapScreen
+import com.unigismap.indoormap.ui.UniGisMapApp
 import com.unigismap.indoormap.ui.theme.UniGisMapTheme
 
 class MainActivity : ComponentActivity() {
@@ -14,10 +13,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val campus = CampusCore.acquire(this)
-        val plan = FloorPlan.of(campus, campus.defaultFloor())
         setContent {
             UniGisMapTheme {
-                MapScreen(plan)
+                UniGisMapApp(campus)
             }
         }
     }

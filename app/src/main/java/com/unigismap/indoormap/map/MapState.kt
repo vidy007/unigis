@@ -3,24 +3,36 @@ package com.unigismap.indoormap.map
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.toSize
 import com.unigismap.indoormap.core.NativeCore
+import kotlinx.coroutines.launch
 
 /**
- * Camera over the floor plan. The math lives in C++ (unigismap::Camera); this class owns the
- * packed state array and mirrors scale/rotation/offset into Compose state for recomposition.
+ * Camera over a map in meters (a floor plan or the campus). The math lives in C++
+ * (unigismap::Camera); this class owns the packed state array and mirrors scale/rotation/offset
+ * into Compose state for recomposition.
  * A world point `w` (meters) maps to the screen as `offset + rotate(w * scale, rotation)`.
+ * [homeRotation] is the default view angle: fit and reset-rotation return to it.
  */
 @Stable
-class MapState(plan: FloorPlan) {
+class MapState(bounds: Rect, homeRotation: Float = 0f) {
     private val native = FloatArray(NativeCore.cameraStateSize())
     private val point = FloatArray(2)
 
@@ -32,7 +44,8 @@ class MapState(plan: FloorPlan) {
         private set
 
     init {
-        with(plan.bounds) { NativeCore.cameraInit(native, left, top, right, bottom) }
+        with(bounds) { NativeCore.cameraInit(native, left, top, right, bottom, homeRotation) }
+        sync()
     }
 
     private fun sync() {
@@ -74,8 +87,8 @@ class MapState(plan: FloorPlan) {
         NativeCore.cameraPrepareZoom(native, factor, pivot?.x ?: Float.NaN, pivot?.y ?: Float.NaN)
     }
 
-    suspend fun animateFocus(room: Room) = animateCamera {
-        with(room.bounds) { NativeCore.cameraPrepareFocus(native, left, top, right, bottom) }
+    suspend fun animateFocus(target: Rect) = animateCamera {
+        with(target) { NativeCore.cameraPrepareFocus(native, left, top, right, bottom) }
     }
 
     /** Native code computes the start/target poses; Compose only drives the eased progress. */
@@ -89,4 +102,25 @@ class MapState(plan: FloorPlan) {
 }
 
 @Composable
-fun rememberMapState(plan: FloorPlan): MapState = remember(plan) { MapState(plan) }
+fun rememberMapState(bounds: Rect, homeRotation: Float = 0f): MapState =
+    remember(bounds, homeRotation) { MapState(bounds, homeRotation) }
+
+/** Pan/pinch/rotate gestures, double-tap zoom and taps reported in world meters. */
+@Composable
+fun Modifier.mapInput(state: MapState, onTap: (world: Offset) -> Unit): Modifier {
+    val scope = rememberCoroutineScope()
+    val currentOnTap by rememberUpdatedState(onTap)
+    return this
+        .onSizeChanged { state.onViewportChanged(it.toSize()) }
+        .pointerInput(state) {
+            detectTransformGestures { centroid, pan, zoom, rotation ->
+                state.onGesture(centroid, pan, zoom, rotation)
+            }
+        }
+        .pointerInput(state) {
+            detectTapGestures(
+                onDoubleTap = { scope.launch { state.animateZoom(2f, it) } },
+                onTap = { currentOnTap(state.toWorld(it)) },
+            )
+        }
+}

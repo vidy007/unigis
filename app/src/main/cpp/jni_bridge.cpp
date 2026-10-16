@@ -96,9 +96,36 @@ UNIGISMAP_FN(jlong, loadCampus)(JNIEnv* env, jobject, jstring json) {
 
 UNIGISMAP_FN(void, releaseCampus)(JNIEnv*, jobject, jlong handle) { delete session(handle); }
 
+/** [name, attribution, stop0 id, stop0 name, stop1 id, stop1 name, ...] */
 UNIGISMAP_FN(jobjectArray, campusInfo)(JNIEnv* env, jobject, jlong handle) {
     const Campus& c = session(handle)->campus;
-    return toJava(env, std::vector<std::string>{c.name, c.attribution});
+    std::vector<std::string> out{c.name, c.attribution};
+    for (const Stop& st : c.stops) { out.push_back(st.id); out.push_back(st.name); }
+    return toJava(env, out);
+}
+
+/**
+ * Campus map in campus meters:
+ * [bounds l, t, r, b, view rotation (degrees),
+ *  nStops, (kind, x, y) * nStops,
+ *  nFootways, (nPoints, x0, y0, x1, y1, ...) * nFootways]
+ */
+UNIGISMAP_FN(jfloatArray, campusGeometry)(JNIEnv* env, jobject, jlong handle) {
+    const Campus& c = session(handle)->campus;
+    const Rect b = c.bounds();
+    std::vector<float> out{b.left, b.top, b.right, b.bottom, c.viewRotation, static_cast<float>(c.stops.size())};
+    for (const Stop& st : c.stops) out.insert(out.end(), {static_cast<float>(st.kind), st.pos.x, st.pos.y});
+    out.push_back(static_cast<float>(c.footways.size()));
+    for (const Footway& fw : c.footways) {
+        out.push_back(static_cast<float>(fw.points.size()));
+        for (const Vec2& p : fw.points) { out.push_back(p.x); out.push_back(p.y); }
+    }
+    return toJava(env, out);
+}
+
+/** Building under ([x], [y]) campus meters; -1 if none. */
+UNIGISMAP_FN(jint, buildingAt)(JNIEnv*, jobject, jlong handle, jfloat x, jfloat y) {
+    return session(handle)->campus.buildingAt({x, y});
 }
 
 UNIGISMAP_FN(jint, buildingCount)(JNIEnv*, jobject, jlong handle) {
@@ -107,22 +134,27 @@ UNIGISMAP_FN(jint, buildingCount)(JNIEnv*, jobject, jlong handle) {
 
 UNIGISMAP_FN(jobjectArray, buildingStrings)(JNIEnv* env, jobject, jlong handle, jint b) {
     const Building& bld = session(handle)->campus.buildings.at(b);
-    return toJava(env, std::vector<std::string>{bld.id, bld.name, bld.shortName});
+    return toJava(env, std::vector<std::string>{bld.id, bld.name, bld.shortName, bld.number});
 }
 
-/** [levels, placeholder(0/1), floor level 0, floor level 1, ...] */
+/** [levels, placeholder(0/1), kind, floor level 0, floor level 1, ...] */
 UNIGISMAP_FN(jintArray, buildingLevels)(JNIEnv* env, jobject, jlong handle, jint b) {
     const Building& bld = session(handle)->campus.buildings.at(b);
-    std::vector<jint> out{bld.levels, bld.placeholder ? 1 : 0};
+    std::vector<jint> out{bld.levels, bld.placeholder ? 1 : 0, static_cast<jint>(bld.kind)};
     for (const Floor& f : bld.floors) out.push_back(f.level);
     return toJava(env, out);
 }
 
-/** Outline in campus meters: [x0, y0, x1, y1, ...] */
-UNIGISMAP_FN(jfloatArray, buildingOutline)(JNIEnv* env, jobject, jlong handle, jint b) {
+/**
+ * In campus meters: [label x, y, nPoints, (x, y) * nPoints, nEntrances, (x, y, main) * nEntrances].
+ * nPoints is 0 for buildings that are not georeferenced (placeholders).
+ */
+UNIGISMAP_FN(jfloatArray, buildingGeometry)(JNIEnv* env, jobject, jlong handle, jint b) {
     const Building& bld = session(handle)->campus.buildings.at(b);
-    std::vector<float> out;
+    std::vector<float> out{bld.labelPos.x, bld.labelPos.y, static_cast<float>(bld.outline.points.size())};
     for (const Vec2& p : bld.outline.points) { out.push_back(p.x); out.push_back(p.y); }
+    out.push_back(static_cast<float>(bld.entrances.size()));
+    for (const Entrance& e : bld.entrances) out.insert(out.end(), {e.pos.x, e.pos.y, e.main ? 1.f : 0.f});
     return toJava(env, out);
 }
 
@@ -188,10 +220,12 @@ UNIGISMAP_FN(jfloatArray, route)(JNIEnv* env, jobject, jlong handle, jint fb, ji
 
 UNIGISMAP_FN(jint, cameraStateSize)(JNIEnv*, jobject) { return cam::Count; }
 
-UNIGISMAP_FN(void, cameraInit)(JNIEnv* env, jobject, jfloatArray state, jfloat l, jfloat t, jfloat r, jfloat b) {
+/** [rotation] is the home view angle in degrees (0 = north up). */
+UNIGISMAP_FN(void, cameraInit)(JNIEnv* env, jobject, jfloatArray state, jfloat l, jfloat t, jfloat r, jfloat b,
+                               jfloat rotation) {
     if (env->GetArrayLength(state) < cam::Count) return;
     float init[cam::Count];
-    Camera::init(init, {l, t, r, b});
+    Camera::init(init, {l, t, r, b}, rotation);
     env->SetFloatArrayRegion(state, 0, cam::Count, init);
 }
 

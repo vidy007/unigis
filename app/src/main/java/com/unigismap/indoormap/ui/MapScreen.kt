@@ -17,19 +17,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CenterFocusStrong
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MeetingRoom
-import androidx.compose.material.icons.filled.Navigation
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.CenterFocusWeak
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -37,7 +35,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -49,7 +46,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.unit.dp
 import com.unigismap.indoormap.map.FloorMap
 import com.unigismap.indoormap.map.FloorPlan
@@ -57,12 +53,22 @@ import com.unigismap.indoormap.map.Room
 import com.unigismap.indoormap.map.rememberMapState
 import kotlinx.coroutines.launch
 
+/**
+ * Floor plan of one building. [floors] are the labels of the building's floors with plans
+ * ([floorIndex] is shown); [onBack] returns to the campus map.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MapScreen(plan: FloorPlan) {
-    val mapState = rememberMapState(plan)
+fun MapScreen(
+    plan: FloorPlan,
+    floors: List<String>,
+    floorIndex: Int,
+    onFloorSelected: (Int) -> Unit,
+    onBack: () -> Unit,
+) {
+    val mapState = rememberMapState(plan.bounds)
     val scope = rememberCoroutineScope()
-    var selectedRoom by remember { mutableStateOf<Room?>(null) }
+    var selectedRoom by remember(plan) { mutableStateOf<Room?>(null) }
     var showSearch by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -78,6 +84,11 @@ fun MapScreen(plan: FloorPlan) {
                         )
                     }
                 },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "К карте кампуса")
+                    }
+                },
                 actions = {
                     IconButton(onClick = { showSearch = true }) {
                         Icon(Icons.Default.Search, contentDescription = "Поиск помещения")
@@ -88,30 +99,7 @@ fun MapScreen(plan: FloorPlan) {
                 ),
             )
         },
-        floatingActionButton = {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                SmallFloatingActionButton(onClick = { scope.launch { mapState.animateResetRotation() } }) {
-                    // Needle points to the plan's "north" (top edge).
-                    Icon(
-                        Icons.Default.Navigation,
-                        contentDescription = "Сбросить поворот",
-                        modifier = Modifier.rotate(mapState.rotation),
-                    )
-                }
-                SmallFloatingActionButton(onClick = { scope.launch { mapState.animateZoom(1.5f) } }) {
-                    Icon(Icons.Default.Add, contentDescription = "Приблизить")
-                }
-                SmallFloatingActionButton(onClick = { scope.launch { mapState.animateZoom(1 / 1.5f) } }) {
-                    Icon(Icons.Default.Remove, contentDescription = "Отдалить")
-                }
-                FloatingActionButton(onClick = { scope.launch { mapState.animateFit() } }) {
-                    Icon(Icons.Default.CenterFocusStrong, contentDescription = "Показать весь этаж")
-                }
-            }
-        },
+        floatingActionButton = { MapControls(mapState, fitDescription = "Показать весь этаж") },
     ) { padding ->
         Box(
             Modifier
@@ -125,6 +113,26 @@ fun MapScreen(plan: FloorPlan) {
                 onRoomClick = { selectedRoom = it },
                 modifier = Modifier.fillMaxSize(),
             )
+
+            if (floors.size > 1) {
+                Row(
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    floors.forEachIndexed { i, label ->
+                        FilterChip(
+                            selected = i == floorIndex,
+                            onClick = { onFloorSelected(i) },
+                            label = { Text(label) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            ),
+                        )
+                    }
+                }
+            }
 
             AnimatedVisibility(
                 visible = selectedRoom != null,
@@ -141,7 +149,7 @@ fun MapScreen(plan: FloorPlan) {
                 lastRoom?.let { room ->
                     RoomCard(
                         room = room,
-                        onFocus = { scope.launch { mapState.animateFocus(room) } },
+                        onFocus = { scope.launch { mapState.animateFocus(room.bounds) } },
                         onClose = { selectedRoom = null },
                     )
                 }
@@ -156,7 +164,7 @@ fun MapScreen(plan: FloorPlan) {
             onRoomSelected = { room ->
                 showSearch = false
                 selectedRoom = room
-                scope.launch { mapState.animateFocus(room) }
+                scope.launch { mapState.animateFocus(room.bounds) }
             },
         )
     }

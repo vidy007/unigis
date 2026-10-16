@@ -69,6 +69,43 @@ static void testCamera() {
     CHECK(near(c.scale(), 22.5f, 1e-2f) && near(c.rotation(), 0.f));
     c.onGesture({0, 0}, {0, 0}, 1000.f, 0.f);  // clamped to 12x fit
     CHECK(near(c.scale(), 22.5f * 12.f, 0.05f));
+
+    // Home rotation: a 32x20 plan shown rotated by 90 degrees fits as 20x32.
+    Camera::init(s, {0, 0, 32, 20}, 90.f);
+    c.onViewportChanged(1000, 500);
+    CHECK(near(c.rotation(), 90.f) && near(c.scale(), 0.9f * 500.f / 32.f));
+    const Vec2 mid = c.toScreen({16, 10});
+    CHECK(near(mid.x, 500.f, 0.01f) && near(mid.y, 250.f, 0.01f));
+    c.onGesture({500, 250}, {0, 0}, 1.f, 45.f);
+    c.prepareResetRotation();
+    c.step(1.f);
+    CHECK(near(c.rotation(), 90.f));
+}
+
+static void testCampusMap() {
+    const Campus c = loadCampus(R"({
+        "buildings": [
+            {"id": "k1", "kind": "academic", "number": "1", "outline": [[0,0],[20,0],[20,10],[0,10]]},
+            {"id": "f4", "kind": "facility", "number": "4", "outline": [[2,2],[6,2],[6,6],[2,6]]},
+            {"id": "d1", "kind": "dorm", "number": "1", "outline": [[30,0],[40,0],[40,8],[30,8],[30,0]]},
+            {"id": "plan", "placeholder": true}
+        ],
+        "stops": [{"id": "m", "kind": "metro", "name": "Студенческая", "pos": [-5, 12]}]
+    })");
+    CHECK(c.buildings[0].kind == BuildingKind::Academic && c.buildings[0].number == "1");
+    CHECK(c.buildings[2].kind == BuildingKind::Dorm);
+    CHECK(c.buildings[3].kind == BuildingKind::Academic && c.buildings[3].number.empty());
+    CHECK(c.buildings[2].outline.contains(c.buildings[2].labelPos));
+    CHECK(c.buildingAt({3, 3}) == 1);  // nested: the smaller outline wins
+    CHECK(c.buildingAt({10, 5}) == 0);
+    CHECK(c.buildingAt({35, 4}) == 2);
+    CHECK(c.buildingAt({25, 4}) == -1);
+    CHECK(c.stops.size() == 1 && c.stops[0].kind == StopKind::Metro && c.stops[0].name == "Студенческая");
+    const Rect b = c.bounds();
+    CHECK(near(b.left, -5) && near(b.top, 0) && near(b.right, 40) && near(b.bottom, 12));
+    bool threw = false;
+    try { loadCampus(R"({"buildings": [{"id": "x", "kind": "castle"}]})"); } catch (const std::runtime_error&) { threw = true; }
+    CHECK(threw);
 }
 
 static void testCampus(const std::string& path) {
@@ -79,59 +116,71 @@ static void testCampus(const std::string& path) {
     ss << in.rdbuf();
     const Campus campus = loadCampus(ss.str());
 
-    const int demo = campus.buildingIndex("demo");
-    CHECK(demo >= 0);
+    const int k4 = campus.buildingIndex("k4");
+    CHECK(k4 >= 0);
     CHECK(campus.buildingIndex("k1") >= 0);  // from OpenStreetMap
-    if (demo < 0) return;
-    const Building& b = campus.buildings[demo];
-    CHECK(b.floors.size() == 2);
-    const Floor& f1 = b.floors[0];
+    if (k4 < 0) return;
+    const Building& b = campus.buildings[k4];
+    CHECK(b.floors.size() == 4);
+    CHECK(b.number == "4" && b.kind == BuildingKind::Academic);
+    const auto find = [&](int floor, const char* id) {
+        const auto& rooms = b.floors[floor].rooms;
+        for (size_t i = 0; i < rooms.size(); ++i) {
+            if (rooms[i].id == id) return Place{k4, floor, static_cast<int>(i)};
+        }
+        return Place{};
+    };
+    const auto& f1 = b.floors[0];
+
+    // Floor plans sit on the OSM footprint: the anchor of room 102 is inside the outline.
+    const Place r102 = find(0, "102");
+    CHECK(r102.room >= 0);
+    if (r102.room < 0) return;
+    CHECK(b.outline.contains(b.frame.toParent(f1.rooms[r102.room].anchor)));
 
     // Hit testing prefers rooms over the corridor.
-    const int hit = f1.roomAt({3, 4});
-    CHECK(hit >= 0 && f1.rooms[hit].id == "101");
-    const int corr = f1.roomAt({10, 9});
+    const int hit = f1.roomAt(f1.rooms[r102.room].anchor);
+    CHECK(hit == r102.room);
+    const Rect corridor = f1.rooms[0].bounds;
+    CHECK(f1.rooms[0].category == RoomCategory::Corridor);
+    const int corr = f1.roomAt(corridor.center());
     CHECK(corr >= 0 && f1.rooms[corr].category == RoomCategory::Corridor);
     CHECK(f1.roomAt({-1, -1}) == -1);
 
-    // Search: Cyrillic case folding, id priority, corridors excluded.
-    auto hits = searchRooms(campus, "КАБИНЕТ 10", demo, 0);
-    CHECK(hits.size() == 2);
-    hits = searchRooms(campus, "210");
+    // Search: id priority, case folding, corridors excluded.
+    auto hits = searchRooms(campus, "210");
     CHECK(!hits.empty() && campus.buildings[hits[0].building].floors[hits[0].floor].rooms[hits[0].room].id == "210");
+    hits = searchRooms(campus, "БУФЕТ", k4);
+    CHECK(hits.size() == 2);  // floors 2 and 3
     for (const auto& h : searchRooms(campus, "коридор")) {
         CHECK(campus.buildings[h.building].floors[h.floor].rooms[h.room].category != RoomCategory::Corridor);
     }
     CHECK(foldForSearch(" Ёлка ") == foldForSearch("елка"));
 
-    // Routing: same floor, then up the stairs to the second floor.
+    // Routing: along the first floor, then up to the fourth by stairs or elevator.
     const Router router(campus);
-    const auto room = [&](int floor, const char* id) {
-        const auto& rooms = b.floors[floor].rooms;
-        for (size_t i = 0; i < rooms.size(); ++i) {
-            if (rooms[i].id == id) return Place{demo, floor, static_cast<int>(i)};
-        }
-        return Place{};
-    };
-    const Route same = router.route(room(0, "101"), room(0, "105"));
+    const Route same = router.route(r102, find(0, "130"));
     CHECK(same.found);
     CHECK(same.legs.size() == 1);
-    CHECK(same.length > 26.f && same.length < 45.f);
+    CHECK(same.length > 150.f && same.length < 200.f);  // the building is 183 m long
 
-    const Route up = router.route(room(0, "lobby"), room(1, "201"));
+    const Route up = router.route(find(0, "102"), find(3, "402"));
     CHECK(up.found);
-    CHECK(up.legs.size() == 2);
-    if (up.legs.size() == 2) {
-        CHECK(up.legs[0].floor == 0 && up.legs[1].floor == 1);
-    }
-    std::printf("route lobby -> 201: %.1f m, %.0f s, %zu legs; graph %zu nodes\n", up.length, up.seconds,
+    CHECK(up.legs.size() >= 2);
+    if (up.legs.size() >= 2) CHECK(up.legs.front().floor == 0 && up.legs.back().floor == 3);
+    std::printf("route 102 -> 402: %.1f m, %.0f s, %zu legs; graph %zu nodes\n", up.length, up.seconds,
                 up.legs.size(), router.nodeCount());
+
+    // Out of the main entrance to the street network.
+    const int hall = find(0, "1-вестибюль").room;
+    CHECK(hall >= 0);
 }
 
 int main(int argc, char** argv) {
     testJson();
     testGeometry();
     testCamera();
+    testCampusMap();
     if (argc > 1) testCampus(argv[1]);
     else std::printf("campus.json not given, skipping data tests\n");
     std::printf(failures ? "%d check(s) failed\n" : "all checks passed\n", failures);

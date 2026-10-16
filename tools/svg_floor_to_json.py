@@ -456,7 +456,7 @@ def check() -> int:
         target = Path(tmp) / "campus.json"
         shutil.copyfile(DEFAULT_CAMPUS, target)
         before = json.loads(target.read_text(encoding="utf-8"))
-        building = next(b["id"] for b in before["buildings"] if b["id"] != "demo")
+        building = next(b["id"] for b in before["buildings"] if not b.get("floors"))
         for level in (3, 1):  # out of order, to check sorting
             rc = main([str(SAMPLE_SVG), "--building", building, "--level", str(level), "--campus", str(target)])
             assert rc == 0, f"conversion failed for level {level}"
@@ -508,7 +508,7 @@ def check() -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("svg", type=Path, nargs="?", help="floor plan SVG (one floor)")
-    ap.add_argument("--building", help="building id in campus.json (k1, k2, ..., demo)")
+    ap.add_argument("--building", help="building id in campus.json (k1, k2, ..., d1, f1...)")
     ap.add_argument("--level", type=int, help="floor level (1 = ground floor)")
     ap.add_argument("--name", help='floor name, default "Этаж <level>"')
     ap.add_argument("--campus", type=Path, default=DEFAULT_CAMPUS, help="campus.json to update in place")
