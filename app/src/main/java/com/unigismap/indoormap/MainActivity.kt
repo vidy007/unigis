@@ -13,12 +13,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val campus = CampusCore.get(this)
+        val campus = CampusCore.acquire(this)
         val plan = FloorPlan.of(campus, campus.defaultFloor())
         setContent {
             UniGisMapTheme {
                 MapScreen(plan)
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        CampusCore.release(changingConfigurations = isChangingConfigurations)
     }
 }

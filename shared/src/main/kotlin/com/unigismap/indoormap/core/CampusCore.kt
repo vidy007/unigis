@@ -71,10 +71,19 @@ data class RouteLeg(val floor: FloorRef?, val points: List<MapPoint>)
 data class Route(val meters: Float, val seconds: Float, val legs: List<RouteLeg>)
 
 /**
- * Kotlin handle to the C++ campus model. One instance lives for the whole process (see [get]),
- * so the native memory is intentionally never released.
+ * Kotlin handle to the C++ campus model (the parsed campus plus its walking graph).
+ * Screens share one instance through [acquire]/[release]; the native memory is freed by [close]
+ * once the last screen is gone. Calls after [close] throw IllegalStateException instead of
+ * reaching freed native memory. Like the UI, use it from the main thread.
  */
-class CampusCore private constructor(private val handle: Long) {
+class CampusCore private constructor(handle: Long) : AutoCloseable {
+    /** Native Session pointer; 0 once closed. */
+    @Volatile
+    private var nativeHandle: Long = handle
+
+    private val handle: Long
+        get() = nativeHandle.also { check(it != 0L) { "CampusCore is closed" } }
+
     val name: String
     val attribution: String
 
@@ -82,6 +91,16 @@ class CampusCore private constructor(private val handle: Long) {
         val info = NativeCore.campusInfo(handle)
         name = info[0]
         attribution = info[1]
+    }
+
+    /** Frees the native campus and walking graph. Safe to call more than once. */
+    override fun close() {
+        synchronized(this) {
+            if (nativeHandle != 0L) {
+                NativeCore.releaseCampus(nativeHandle)
+                nativeHandle = 0L
+            }
+        }
     }
 
     val buildings: List<BuildingInfo> by lazy {
@@ -161,17 +180,35 @@ class CampusCore private constructor(private val handle: Long) {
     companion object {
         const val ASSET = "campus.json"
 
-        @Volatile
         private var instance: CampusCore? = null
+        private var users = 0
 
-        /** Process-wide campus, parsed from the APK assets on first use (works offline). */
-        fun get(context: Context): CampusCore =
-            instance ?: synchronized(this) {
-                instance ?: run {
-                    val json = context.applicationContext.assets.open(ASSET)
-                        .bufferedReader(Charsets.UTF_8).use { it.readText() }
-                    CampusCore(NativeCore.loadCampus(json)).also { instance = it }
-                }
+        /**
+         * Process-wide campus, parsed from the APK assets on first use (works offline).
+         * Every call must be paired with [release], typically onCreate/onDestroy of an activity.
+         */
+        fun acquire(context: Context): CampusCore = synchronized(this) {
+            val campus = instance ?: run {
+                val json = context.applicationContext.assets.open(ASSET)
+                    .bufferedReader(Charsets.UTF_8).use { it.readText() }
+                CampusCore(NativeCore.loadCampus(json)).also { instance = it }
             }
+            users++
+            campus
+        }
+
+        /**
+         * Drops one [acquire]. When nobody uses the campus any more it is closed, unless
+         * [changingConfigurations] says the activity is only being recreated (rotation, theme...)
+         * and is about to acquire it again; then the parsed data is kept for the new instance.
+         */
+        fun release(changingConfigurations: Boolean = false) = synchronized(this) {
+            check(users > 0) { "CampusCore.release() without acquire()" }
+            users--
+            if (users == 0 && !changingConfigurations) {
+                instance?.close()
+                instance = null
+            }
+        }
     }
 }

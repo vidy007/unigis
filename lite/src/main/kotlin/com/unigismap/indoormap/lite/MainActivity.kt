@@ -51,7 +51,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val campus = CampusCore.get(this)
+        val campus = CampusCore.acquire(this)
         plan = FloorPlan.of(campus, campus.defaultFloor())
         p = Palette.from(this)
         setupWindow()
@@ -304,6 +304,11 @@ class MainActivity : Activity() {
             map.selectedRoom != null -> selectRoom(null)
             else -> @Suppress("DEPRECATION") super.onBackPressed()
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        CampusCore.release(changingConfigurations = isChangingConfigurations)
     }
 
     // ---- Small view helpers ----
