@@ -14,6 +14,7 @@ import android.graphics.drawable.ShapeDrawable
 import android.graphics.drawable.shapes.OvalShape
 import android.os.Bundle
 import android.text.Editable
+import android.text.TextUtils
 import android.text.TextWatcher
 import android.util.TypedValue
 import android.view.Gravity
@@ -23,6 +24,7 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -32,8 +34,11 @@ import com.unigismap.indoormap.core.BuildingInfo
 import com.unigismap.indoormap.core.CampusCore
 import com.unigismap.indoormap.core.FloorRef
 
-/** Padding around the FAB column (dp) that leaves room for the buttons' elevation shadows. */
-private const val FAB_SHADOW = 8
+/**
+ * Padding around the FAB column (dp) that leaves room for the buttons' elevation shadows (a 6dp
+ * shadow near the bottom of the screen reaches ~12-16dp below the button). Not clipped: see buildFabs.
+ */
+private const val FAB_SHADOW = 16
 
 /**
  * Lite build of the UniGISMap app: the same app (same C++ core, shared Kotlin layer in shared/,
@@ -125,7 +130,7 @@ class MainActivity : Activity() {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(buildTopBar("Карта кампуса ${campusPlan.name}", onBack = null, onSearch = null),
-                LinearLayout.LayoutParams(MATCH_PARENT, dp(64)))
+                LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
             addView(content, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
         }
     }
@@ -156,20 +161,17 @@ class MainActivity : Activity() {
                 addView(buildingTitle)
                 addView(buildingSubtitle)
             }
-            addView(texts, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { topMargin = dp(12) })
+            addView(texts, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { topMargin = dp(8) })
             addView(iconButton(R.drawable.ic_close, p.onSurfaceVariant, "Закрыть") { selectBuilding(null) },
                 LinearLayout.LayoutParams(dp(48), dp(48)))
         }
-        val chips = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            addView(chip("Планы этажей", R.drawable.ic_layers) { campusMap.selected?.let { openBuilding(it.info, 0) } },
-                LinearLayout.LayoutParams(WRAP_CONTENT, dp(32)).apply { marginEnd = dp(8) })
-            addView(chip("Показать", R.drawable.ic_center_focus) { campusMap.selected?.let { campusMap.animateFocus(it.bounds) } },
-                LinearLayout.LayoutParams(WRAP_CONTENT, dp(32)))
+        val chips = ChipRow(this, dp(8)).apply {
+            addView(chip("Планы этажей", R.drawable.ic_layers) { campusMap.selected?.let { openBuilding(it.info, 0) } })
+            addView(chip("Показать", R.drawable.ic_center_focus) { campusMap.selected?.let { campusMap.animateFocus(it.bounds) } })
         }
         buildingCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), 0, dp(4), dp(12))
+            setPadding(dp(16), dp(4), dp(4), dp(12))
             background = rounded(p.surfaceContainerLow, 12f)
             elevation = dp(2).toFloat()
             addView(header)
@@ -222,7 +224,13 @@ class MainActivity : Activity() {
         val content = FrameLayout(this).apply {
             addView(map, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             if (info.floors.size > 1) {
-                addView(buildFloorChips(info, floorIndex), FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.START).apply {
+                val chips = buildFloorChips(info, floorIndex)
+                val scroller = HorizontalScrollView(context).apply {
+                    isHorizontalScrollBarEnabled = false
+                    addView(chips)
+                    post { scrollTo(chips.getChildAt(floorIndex).left, 0) }
+                }
+                addView(scroller, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.START).apply {
                     setMargins(dp(12), dp(12), dp(12), dp(12))
                 })
             }
@@ -235,7 +243,7 @@ class MainActivity : Activity() {
         }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(buildTopBar(plan.name, onBack = ::closeBuilding, onSearch = ::openSheet), LinearLayout.LayoutParams(MATCH_PARENT, dp(64)))
+            addView(buildTopBar(plan.name, onBack = ::closeBuilding, onSearch = ::openSheet), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
             addView(content, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
         }
         scrim = View(this).apply {
@@ -253,13 +261,15 @@ class MainActivity : Activity() {
     }
 
     /** Floor switcher: one chip per floor with a plan, the shown one filled. */
-    private fun buildFloorChips(info: BuildingInfo, current: Int): View = LinearLayout(this).apply {
+    private fun buildFloorChips(info: BuildingInfo, current: Int): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         info.floorLevels.forEachIndexed { i, level ->
             val selected = i == current
             val chip = text("$level этаж", 14f, if (selected) p.onSecondaryContainer else p.onSurface, medium = true).apply {
                 gravity = Gravity.CENTER
-                setPadding(dp(16), 0, dp(16), 0)
+                setSingleLine()
+                minHeight = dp(32)
+                setPadding(dp(16), dp(4), dp(16), dp(4))
                 background = ripple(
                     rounded(if (selected) p.secondaryContainer else p.surfaceContainer, 8f,
                         stroke = if (selected) null else p.outlineVariant),
@@ -267,7 +277,7 @@ class MainActivity : Activity() {
                 )
                 setOnClickListener { if (!selected) openBuilding(info, i) }
             }
-            addView(chip, LinearLayout.LayoutParams(WRAP_CONTENT, dp(32)).apply { if (i > 0) marginStart = dp(8) })
+            addView(chip, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { if (i > 0) marginStart = dp(8) })
         }
     }
 
@@ -275,9 +285,11 @@ class MainActivity : Activity() {
 
     private fun buildTopBar(subtitle: String, onBack: (() -> Unit)?, onSearch: (() -> Unit)?): View = FrameLayout(this).apply {
         setBackgroundColor(p.surfaceContainer)
+        minimumHeight = dp(64)  // grows with large fonts instead of cutting the titles
         val titles = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setGravity(Gravity.CENTER_HORIZONTAL)
+            setPadding(dp(56), dp(8), dp(56), dp(8))  // clear of the 48dp buttons on both sides
             addView(text("UniGISMap", 22f, p.onSurface))
             addView(text(subtitle, 12f, p.onSurfaceVariant, medium = true))
         }
@@ -300,9 +312,12 @@ class MainActivity : Activity() {
 
     private fun buildFabs(view: MapView, fitDescription: String): View = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setGravity(Gravity.CENTER_HORIZONTAL)
-        // Room for the elevation shadows: a parent hugging the buttons cuts them off.
+        // If the screen is too short (landscape, split screen), the compass at the top gives way, not "fit".
+        setGravity(Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM)
+        // Room for the elevation shadows: a parent hugging the buttons cuts them off, and so does its
+        // own padding unless clipToPadding is off. The padding is not clickable, so the map gets the touches.
         setPadding(dp(FAB_SHADOW), dp(FAB_SHADOW), dp(FAB_SHADOW), dp(FAB_SHADOW))
+        clipToPadding = false
         val compass = fab(R.drawable.ic_navigation, "Сбросить поворот", small = true) { view.animateResetRotation() }
         // Only the needle turns (to the map's "north": top edge of a plan, true north on the campus);
         // rotating the whole button would tilt its rounded square and clip its corners.
@@ -333,6 +348,7 @@ class MainActivity : Activity() {
         contentDescription = desc
         background = ripple(rounded(p.primaryContainer, if (small) 12f else 16f), p.onPrimaryContainer)
         elevation = dp(if (small) 3 else 6).toFloat()
+        setPadding(0, 0, 0, 0)  // drop the theme's ImageButton padding; the icon is centered anyway
         scaleType = ImageView.ScaleType.CENTER
         setOnClickListener { onClick() }
     }
@@ -349,17 +365,17 @@ class MainActivity : Activity() {
                 addView(cardTitle)
                 addView(cardSubtitle)
             }
-            addView(texts, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { topMargin = dp(12) })
+            addView(texts, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { topMargin = dp(8) })
             addView(iconButton(R.drawable.ic_close, p.onSurfaceVariant, "Закрыть") { selectRoom(null) }, LinearLayout.LayoutParams(dp(48), dp(48)))
         }
         val focus = chip("Показать на карте", R.drawable.ic_center_focus) { map.selectedRoom?.let { map.animateFocus(it.bounds) } }
         card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), 0, dp(4), dp(12))
+            setPadding(dp(16), dp(4), dp(4), dp(12))
             background = rounded(p.surfaceContainerLow, 12f)
             elevation = dp(2).toFloat()
             addView(header)
-            addView(focus, LinearLayout.LayoutParams(WRAP_CONTENT, dp(32)).apply { topMargin = dp(8) })
+            addView(focus, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(8) })
             visibility = View.INVISIBLE
             isClickable = true
         }
@@ -435,13 +451,14 @@ class MainActivity : Activity() {
     private fun fillResults(query: String) {
         resultList.removeAllViews()
         plan.search(query)
-            .forEach { room -> resultList.addView(resultRow(room), LinearLayout.LayoutParams(MATCH_PARENT, dp(72))) }
+            .forEach { room -> resultList.addView(resultRow(room), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)) }
     }
 
     private fun resultRow(room: Room): View = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         setGravity(Gravity.CENTER_VERTICAL)
-        setPadding(dp(16), 0, dp(24), 0)
+        minimumHeight = dp(72)
+        setPadding(dp(16), dp(8), dp(24), dp(8))
         background = ripple(ColorDrawable(Color.TRANSPARENT), p.onSurface)
         addView(ImageView(context).apply {
             setImageResource(R.drawable.ic_room)
@@ -517,7 +534,11 @@ class MainActivity : Activity() {
         d.setBounds(0, 0, dp(18), dp(18))
         setCompoundDrawables(d, null, null, null)
         compoundDrawablePadding = dp(8)
-        setPadding(dp(8), 0, dp(16), 0)
+        // One line, at least 32dp, taller with large fonts: a fixed height cut the text.
+        setSingleLine()
+        ellipsize = TextUtils.TruncateAt.END
+        minHeight = dp(32)
+        setPadding(dp(8), dp(4), dp(16), dp(4))
         background = ripple(rounded(Color.TRANSPARENT, 8f, stroke = p.outlineVariant), p.onSurface)
         setOnClickListener { onClick() }
     }
@@ -544,7 +565,31 @@ class MainActivity : Activity() {
         // on the parent (top bar, card) and gets cut by its edges.
         background = RippleDrawable(ColorStateList.valueOf((tint and 0x00FFFFFF) or 0x1F000000), null,
             ShapeDrawable(OvalShape()))
+        setPadding(0, 0, 0, 0)
         scaleType = ImageView.ScaleType.CENTER
         setOnClickListener { onClick() }
+    }
+}
+
+/**
+ * A row of chips that puts them under each other when they do not fit side by side (narrow
+ * screens, large fonts), instead of squeezing the last one until its text is cut.
+ */
+private class ChipRow(context: Context, private val gap: Int) : LinearLayout(context) {
+    override fun addView(child: View) =
+        super.addView(child, LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { if (childCount > 0) marginStart = gap })
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val free = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+        var row = gap * (childCount - 1)
+        for (i in 0 until childCount) getChildAt(i).let { it.measure(free, free); row += it.measuredWidth }
+        val stack = MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED &&
+            row > MeasureSpec.getSize(widthMeasureSpec)
+        orientation = if (stack) VERTICAL else HORIZONTAL
+        for (i in 1 until childCount) (getChildAt(i).layoutParams as LayoutParams).apply {
+            marginStart = if (stack) 0 else gap
+            topMargin = if (stack) gap else 0
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
 }
