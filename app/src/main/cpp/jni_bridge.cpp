@@ -3,15 +3,7 @@
 
 #include <jni.h>
 
-#include <memory>
-#include <stdexcept>
-#include <string>
-#include <vector>
-
-#include "unigis/camera.hpp"
-#include "unigis/campus.hpp"
-#include "unigis/router.hpp"
-#include "unigis/search.hpp"
+#include "unigis.hpp"
 
 using namespace unigis;
 
@@ -68,24 +60,19 @@ std::string fromJava(JNIEnv* env, jstring s) {
     return out;
 }
 
-/** Pins a Kotlin-owned camera state array for the duration of one call. */
-class CameraState {
-public:
-    CameraState(JNIEnv* env, jfloatArray arr) : env_(env), arr_(arr) {
-        if (env->GetArrayLength(arr) >= cam::Count) data_ = env->GetFloatArrayElements(arr, nullptr);
-    }
-    ~CameraState() {
-        if (data_) env_->ReleaseFloatArrayElements(arr_, data_, 0);
-    }
-    explicit operator bool() const { return data_ != nullptr; }
-    float* get() const { return data_; }
+/** Runs [fn] on a Camera over the Kotlin-owned state array, pinned for the duration of the call. */
+template <typename Fn>
+bool withCamera(JNIEnv* env, jfloatArray state, Fn fn) {
+    if (env->GetArrayLength(state) < cam::Count) return false;
+    float* data = env->GetFloatArrayElements(state, nullptr);
+    if (!data) return false;
+    Camera camera(data);
+    fn(camera);
+    env->ReleaseFloatArrayElements(state, data, 0);
+    return true;
+}
 
-private:
-    JNIEnv* env_;
-    jfloatArray arr_;
-    float* data_ = nullptr;
-};
-
+/** Writes [p] to a Kotlin FloatArray(2). */
 void writePoint(JNIEnv* env, jfloatArray out, Vec2 p) {
     const float xy[2] = {p.x, p.y};
     env->SetFloatArrayRegion(out, 0, 2, xy);
@@ -202,71 +189,55 @@ UNIGIS_FN(jfloatArray, route)(JNIEnv* env, jobject, jlong handle, jint fb, jint 
 UNIGIS_FN(jint, cameraStateSize)(JNIEnv*, jobject) { return cam::Count; }
 
 UNIGIS_FN(void, cameraInit)(JNIEnv* env, jobject, jfloatArray state, jfloat l, jfloat t, jfloat r, jfloat b) {
-    CameraState s(env, state);
-    if (s) Camera::init(s.get(), {l, t, r, b});
+    if (env->GetArrayLength(state) < cam::Count) return;
+    float init[cam::Count];
+    Camera::init(init, {l, t, r, b});
+    env->SetFloatArrayRegion(state, 0, cam::Count, init);
 }
 
 UNIGIS_FN(void, cameraViewport)(JNIEnv* env, jobject, jfloatArray state, jfloat w, jfloat h) {
-    CameraState s(env, state);
-    if (s) Camera(s.get()).onViewportChanged(w, h);
+    withCamera(env, state, [&](Camera& c) { c.onViewportChanged(w, h); });
 }
 
 UNIGIS_FN(void, cameraGesture)(JNIEnv* env, jobject, jfloatArray state, jfloat cx, jfloat cy, jfloat px, jfloat py,
                                jfloat zoom, jfloat rotation) {
-    CameraState s(env, state);
-    if (s) Camera(s.get()).onGesture({cx, cy}, {px, py}, zoom, rotation);
+    withCamera(env, state, [&](Camera& c) { c.onGesture({cx, cy}, {px, py}, zoom, rotation); });
 }
 
 UNIGIS_FN(void, cameraFit)(JNIEnv* env, jobject, jfloatArray state) {
-    CameraState s(env, state);
-    if (s) Camera(s.get()).fitToScreen();
+    withCamera(env, state, [](Camera& c) { c.fitToScreen(); });
 }
 
 UNIGIS_FN(void, cameraPrepareFit)(JNIEnv* env, jobject, jfloatArray state) {
-    CameraState s(env, state);
-    if (s) Camera(s.get()).prepareFit();
+    withCamera(env, state, [](Camera& c) { c.prepareFit(); });
 }
 
 UNIGIS_FN(void, cameraPrepareResetRotation)(JNIEnv* env, jobject, jfloatArray state) {
-    CameraState s(env, state);
-    if (s) Camera(s.get()).prepareResetRotation();
+    withCamera(env, state, [](Camera& c) { c.prepareResetRotation(); });
 }
 
 /** A NaN pivot zooms around the viewport center. */
 UNIGIS_FN(void, cameraPrepareZoom)(JNIEnv* env, jobject, jfloatArray state, jfloat factor, jfloat px, jfloat py) {
-    CameraState s(env, state);
-    if (!s) return;
-    Camera c(s.get());
-    if (px != px || py != py) c.prepareZoomAtCenter(factor);
-    else c.prepareZoom(factor, {px, py});
+    withCamera(env, state, [&](Camera& c) {
+        if (std::isnan(px) || std::isnan(py)) c.prepareZoomAtCenter(factor);
+        else c.prepareZoom(factor, {px, py});
+    });
 }
 
 UNIGIS_FN(void, cameraPrepareFocus)(JNIEnv* env, jobject, jfloatArray state, jfloat l, jfloat t, jfloat r, jfloat b) {
-    CameraState s(env, state);
-    if (s) Camera(s.get()).prepareFocus({l, t, r, b});
+    withCamera(env, state, [&](Camera& c) { c.prepareFocus({l, t, r, b}); });
 }
 
 UNIGIS_FN(void, cameraStep)(JNIEnv* env, jobject, jfloatArray state, jfloat t) {
-    CameraState s(env, state);
-    if (s) Camera(s.get()).step(t);
+    withCamera(env, state, [&](Camera& c) { c.step(t); });
 }
 
 UNIGIS_FN(void, cameraToScreen)(JNIEnv* env, jobject, jfloatArray state, jfloat x, jfloat y, jfloatArray out) {
     Vec2 p;
-    {
-        CameraState s(env, state);
-        if (!s) return;
-        p = Camera(s.get()).toScreen({x, y});
-    }
-    writePoint(env, out, p);
+    if (withCamera(env, state, [&](Camera& c) { p = c.toScreen({x, y}); })) writePoint(env, out, p);
 }
 
 UNIGIS_FN(void, cameraToWorld)(JNIEnv* env, jobject, jfloatArray state, jfloat x, jfloat y, jfloatArray out) {
     Vec2 p;
-    {
-        CameraState s(env, state);
-        if (!s) return;
-        p = Camera(s.get()).toWorld({x, y});
-    }
-    writePoint(env, out, p);
+    if (withCamera(env, state, [&](Camera& c) { p = c.toWorld({x, y}); })) writePoint(env, out, p);
 }

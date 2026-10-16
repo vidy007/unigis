@@ -18,15 +18,15 @@ shared/src/main/kotlin/com/unigis/indoormap/core/   — общий для app и
 └── CampusCore.kt                — загрузка campus.json, декодирование данных ядра, поиск, маршруты
 app/src/main/
 ├── cpp/                         — C++20 ядро (NDK), без внешних зависимостей
-│   ├── include/unigis/
-│   │   ├── geometry.hpp         — Vec2, Rect, Polygon, Frame (системы координат)
-│   │   ├── json.hpp             — минимальный JSON-парсер
-│   │   ├── campus.hpp           — модель: кампус → корпуса → этажи → помещения/двери/лестницы
-│   │   ├── camera.hpp           — камера карты: масштаб/поворот/сдвиг, жесты, анимации
-│   │   ├── search.hpp           — поиск помещений (кириллица, ё=е, ранжирование)
-│   │   └── router.hpp           — граф пешеходных путей + A*: по этажам, лестницам, лифтам и улице
-│   ├── src/*.cpp
-│   ├── jni/jni_bridge.cpp       — JNI: данные передаются плоскими массивами
+│   ├── unigis.hpp               — весь API ядра в одном заголовке, по разделам:
+│   │                              геометрия (Vec2, Rect, Polygon, Frame), JSON, модель кампуса
+│   │                              (Campus → Building → Floor → Room/Door/Connector), поиск, маршруты, камера
+│   ├── json.cpp                 — минимальный JSON-парсер
+│   ├── campus.cpp               — загрузка campus.json в модель, поиск помещения по точке
+│   ├── search.cpp               — поиск помещений (кириллица, ё=е, ранжирование)
+│   ├── router.cpp               — граф пешеходных путей + A*: по этажам, лестницам, лифтам и улице
+│   ├── camera.cpp               — камера карты: масштаб/поворот/сдвиг, жесты, анимации
+│   ├── jni_bridge.cpp           — JNI: данные передаются плоскими массивами
 │   └── tests/core_test.cpp      — тесты ядра
 ├── java/com/unigis/indoormap/
 │   ├── map/FloorPlan.kt         — адаптер shared → типы Compose (Room, Door, FloorPlan)
@@ -60,7 +60,7 @@ curl -o nstu.osm "https://api.openstreetmap.org/api/0.6/map?bbox=82.8960,54.9810
 python tools/osm_to_campus.py nstu.osm
 ```
 Формат этажа: помещения (`rect` или `polygon` в метрах), двери (`a`, `b`, `exterior`), лестницы и лифты
-(`connectors` с общим `group` на разных этажах). Подробности в `campus.hpp`.
+(`connectors` с общим `group` на разных этажах). Подробности в `unigis.hpp` (раздел «Campus model»).
 
 ### Этажи из SVG (`tools/svg_floor_to_json.py`)
 Планы удобно обводить в Inkscape или Figma поверх плана эвакуации, а не писать координаты вручную.

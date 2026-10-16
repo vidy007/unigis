@@ -5,11 +5,11 @@ import android.content.Context
 /*
  * UI-independent layer shared by the Compose app (app/) and the dependency-free lite app (lite/).
  * It only uses the Kotlin stdlib and the Android framework (no AndroidX), decodes the packed
- * arrays coming from the C++ core (layouts in app/src/main/cpp/jni/jni_bridge.cpp) and leaves
+ * arrays coming from the C++ core (layouts in app/src/main/cpp/jni_bridge.cpp) and leaves
  * conversion to Compose or android.graphics types to each UI.
  */
 
-/** Order must match unigis::RoomCategory in campus.hpp: the ordinal crosses JNI. */
+/** Order must match unigis::RoomCategory in unigis.hpp: the ordinal crosses JNI. */
 enum class RoomCategory(val title: String) {
     OFFICE("Кабинет"),
     MEETING("Переговорная"),

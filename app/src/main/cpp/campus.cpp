@@ -1,9 +1,4 @@
-#include "unigis/campus.hpp"
-
-#include <algorithm>
-#include <stdexcept>
-
-#include "unigis/json.hpp"
+#include "unigis.hpp"
 
 namespace unigis {
 
@@ -77,11 +72,9 @@ Floor readFloor(const Value& v, const std::string& where) {
     for (const auto& r : v["rooms"].items()) f.rooms.push_back(readRoom(r, here));
     if (v.has("bounds")) {
         f.bounds = readRect(v["bounds"], here);
-    } else {
-        for (const auto& r : f.rooms) {
-            f.bounds.include({r.bounds.left, r.bounds.top});
-            f.bounds.include({r.bounds.right, r.bounds.bottom});
-        }
+    } else if (!f.rooms.empty()) {
+        f.bounds = f.rooms[0].bounds;
+        for (const auto& r : f.rooms) f.bounds = f.bounds.united(r.bounds);
     }
     for (const auto& d : v["doors"].items()) {
         Door door;

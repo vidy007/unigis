@@ -43,7 +43,7 @@ for abi in $ABIS; do
   "$CLANGXX" --target="$target" -std=c++20 -O2 -fPIC -shared -Wall -Wextra \
     -fvisibility=hidden -ffunction-sections -fdata-sections \
     -static-libstdc++ -Wl,--gc-sections -Wl,-z,max-page-size=16384 -s \
-    -I "$CORE/include" "$CORE"/src/*.cpp "$CORE/jni/jni_bridge.cpp" -llog \
+    "$CORE"/*.cpp -llog \
     -o "build/native/lib/$abi/libunigis.so"
 done
 

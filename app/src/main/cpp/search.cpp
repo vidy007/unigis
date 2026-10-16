@@ -1,6 +1,4 @@
-#include "unigis/search.hpp"
-
-#include <algorithm>
+#include "unigis.hpp"
 
 namespace unigis {
 
@@ -70,11 +68,10 @@ std::vector<SearchHit> searchRooms(const Campus& campus, std::string_view query,
             const auto& rooms = floors[f].rooms;
             for (int r = 0; r < static_cast<int>(rooms.size()); ++r) {
                 if (rooms[r].category == RoomCategory::Corridor) continue;
+                // Best of the two ranks; -1 (no match) only if neither matches.
                 const int byId = matchRank(foldForSearch(rooms[r].id), needle, true);
                 const int byName = matchRank(foldForSearch(rooms[r].name), needle, false);
-                int score = -1;
-                if (byId >= 0) score = byId;
-                if (byName >= 0 && (score < 0 || byName < score)) score = byName;
+                const int score = byId < 0 ? byName : byName < 0 ? byId : std::min(byId, byName);
                 if (score >= 0) hits.push_back({b, f, r, score});
             }
         }

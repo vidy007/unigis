@@ -36,14 +36,14 @@ Remove-Item -Recurse -Force $out, 'build\gen', 'build\native', 'build\dex' -Erro
 New-Item -ItemType Directory -Force $out, 'build\gen', 'build\native', 'build\dex' | Out-Null
 
 Write-Host "> clang++: libunigis.so ($($abis -join ' '))"
-$sources = @(Get-ChildItem "$core\src\*.cpp" | ForEach-Object FullName) + "$core\jni\jni_bridge.cpp"
+$sources = @(Get-ChildItem "$core\*.cpp" | ForEach-Object FullName)
 foreach ($abi in $abis) {
     New-Item -ItemType Directory -Force "build\native\lib\$abi" | Out-Null
     # Static libc++ keeps the APK to one .so per ABI; 16 KB pages for Android 15+ devices.
     Run $clang "--target=$($targets[$abi])$minSdk" -std=c++20 -O2 -fPIC -shared -Wall -Wextra `
         -fvisibility=hidden -ffunction-sections -fdata-sections `
         -static-libstdc++ '-Wl,--gc-sections' '-Wl,-z,max-page-size=16384' -s `
-        -I "$core\include" @sources -llog -o "build\native\lib\$abi\libunigis.so"
+        @sources -llog -o "build\native\lib\$abi\libunigis.so"
 }
 
 Write-Host '> aapt: resources + assets + R.java'

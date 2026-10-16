@@ -7,11 +7,7 @@
 #include <sstream>
 #include <string>
 
-#include "unigis/camera.hpp"
-#include "unigis/campus.hpp"
-#include "unigis/json.hpp"
-#include "unigis/router.hpp"
-#include "unigis/search.hpp"
+#include "../unigis.hpp"
 
 using namespace unigis;
 

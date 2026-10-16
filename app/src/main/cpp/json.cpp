@@ -1,4 +1,4 @@
-#include "unigis/json.hpp"
+#include "unigis.hpp"
 
 #include <cstdlib>
 
@@ -7,8 +7,7 @@ namespace unigis::json {
 namespace {
 
 const Value kNull;
-const std::string kEmptyString;
-const std::vector<Value> kEmptyArray;
+const Value::Array kEmptyArray;
 
 class Parser {
 public:
@@ -67,9 +66,9 @@ private:
 
     Value parseObject(int depth) {
         expect('{');
-        Value obj = Value::object();
+        Value::Object obj;
         skipWs();
-        if (peek() == '}') { ++pos_; return obj; }
+        if (peek() == '}') { ++pos_; return Value(std::move(obj)); }
         while (true) {
             skipWs();
             if (peek() != '"') fail("expected key");
@@ -77,26 +76,26 @@ private:
             skipWs();
             expect(':');
             skipWs();
-            obj.members()[std::move(key)] = parseValue(depth + 1);
+            obj[std::move(key)] = parseValue(depth + 1);
             skipWs();
             if (peek() == ',') { ++pos_; continue; }
             expect('}');
-            return obj;
+            return Value(std::move(obj));
         }
     }
 
     Value parseArray(int depth) {
         expect('[');
-        Value arr = Value::array();
+        Value::Array arr;
         skipWs();
-        if (peek() == ']') { ++pos_; return arr; }
+        if (peek() == ']') { ++pos_; return Value(std::move(arr)); }
         while (true) {
             skipWs();
-            arr.items().push_back(parseValue(depth + 1));
+            arr.push_back(parseValue(depth + 1));
             skipWs();
             if (peek() == ',') { ++pos_; continue; }
             expect(']');
-            return arr;
+            return Value(std::move(arr));
         }
     }
 
@@ -181,9 +180,7 @@ private:
 
 }  // namespace
 
-const std::string& Value::asString() const { return isString() ? string_ : kEmptyString; }
-
-const std::vector<Value>& Value::items() const { return isArray() ? array_ : kEmptyArray; }
+const Value::Array& Value::items() const { return isArray() ? array_ : kEmptyArray; }
 
 const Value& Value::operator[](size_t i) const {
     return isArray() && i < array_.size() ? array_[i] : kNull;
@@ -193,10 +190,6 @@ const Value& Value::operator[](std::string_view key) const {
     if (!isObject()) return kNull;
     auto it = object_.find(key);
     return it == object_.end() ? kNull : it->second;
-}
-
-bool Value::has(std::string_view key) const {
-    return isObject() && object_.find(key) != object_.end();
 }
 
 Value parse(std::string_view text) { return Parser(text).parseDocument(); }
