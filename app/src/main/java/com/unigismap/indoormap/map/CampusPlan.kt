@@ -71,14 +71,16 @@ class CampusPlan(
 private fun MapPoint.toOffset() = Offset(x, y)
 
 /** Polyline with rounded corners: curves through the vertices, between segment midpoints. */
-private fun List<MapPoint>.toSmoothPath() = Path().apply {
-    if (isEmpty()) return@apply
-    moveTo(first().x, first().y)
-    for (i in 1 until size - 1) {
-        quadraticTo(this@toSmoothPath[i].x, this@toSmoothPath[i].y,
-            (this@toSmoothPath[i].x + this@toSmoothPath[i + 1].x) / 2, (this@toSmoothPath[i].y + this@toSmoothPath[i + 1].y) / 2)
+private fun List<MapPoint>.toSmoothPath(): Path {
+    val pts = this
+    return Path().apply {
+        if (pts.isEmpty()) return@apply
+        moveTo(pts[0].x, pts[0].y)
+        for (i in 1 until pts.size - 1) {
+            quadraticTo(pts[i].x, pts[i].y, (pts[i].x + pts[i + 1].x) / 2, (pts[i].y + pts[i + 1].y) / 2)
+        }
+        if (pts.size > 1) lineTo(pts.last().x, pts.last().y)
     }
-    if (size > 1) lineTo(last().x, last().y)
 }
 
 private fun List<MapPoint>.toPath(close: Boolean) = Path().apply {
