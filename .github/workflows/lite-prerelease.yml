@@ -4,7 +4,12 @@ on:
   push:
     tags:
       - "lite-v*"
+  # A manual run builds the APK; with a version it also publishes the pre-release (tags can't always be pushed).
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Publish a pre-release lite-v<version> (empty: build only)"
+        required: false
 
 permissions:
   contents: write
@@ -32,7 +37,8 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/lite-v* ]]; then
             name="${GITHUB_REF_NAME#lite-v}"
           else
-            name="0.0.0-ci.${GITHUB_RUN_NUMBER}"
+            name="${{ inputs.version }}"
+            name="${name:-0.0.0-ci.${GITHUB_RUN_NUMBER}}"
           fi
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "code=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
@@ -52,9 +58,10 @@ jobs:
           path: lite/build/apk/unigismap-lite-*.apk
 
       - name: Publish pre-release
-        if: startsWith(github.ref, 'refs/tags/lite-v')
+        if: startsWith(github.ref, 'refs/tags/lite-v') || inputs.version != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: lite-v${{ steps.version.outputs.name }}
           prerelease: true
           name: UniGISMap Lite ${{ steps.version.outputs.name }}
           files: lite/build/apk/unigismap-lite-*.apk
