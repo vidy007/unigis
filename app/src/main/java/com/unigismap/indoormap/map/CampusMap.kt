@@ -25,9 +25,8 @@ import com.unigismap.indoormap.core.CampusColors
 import com.unigismap.indoormap.core.StopKind
 
 /**
- * The campus as on the printed NSTU map: gray footprints with colored number badges
- * (green — учебные корпуса, orange — общежития, blue — объекты кампуса), entrances,
- * bus/tram stops and the metro. Badges and markers are drawn in screen space so they keep
+ * The campus as on the printed NSTU map: gray footprints with building numbers, entrances,
+ * bus/tram stops and the metro. Numbers and markers are drawn in screen space so they keep
  * their size and stay upright while the map is zoomed and rotated.
  */
 @Composable
@@ -40,7 +39,8 @@ fun CampusMap(
 ) {
     val colors = MaterialTheme.colorScheme
     val textMeasurer = rememberTextMeasurer()
-    val badgeStyle = TextStyle(color = Color(CampusColors.ON_BADGE), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+    val numberStyle = TextStyle(color = colors.primary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    val metroStyle = numberStyle.copy(color = Color(CampusColors.ON_BADGE))
 
     Canvas(modifier.mapInput(state) { onBuildingClick(plan.buildingAt(it)) }) {
         drawRect(colors.surface)
@@ -52,7 +52,7 @@ fun CampusMap(
             scale(state.scale, state.scale, pivot = Offset.Zero)
         }) {
             val px = 1f / state.scale  // one screen pixel in meters
-            val walkway = Stroke(1.5.dp.toPx() * px, cap = StrokeCap.Round, join = StrokeJoin.Round)
+            val walkway = Stroke(1.dp.toPx() * px, cap = StrokeCap.Round, join = StrokeJoin.Round)
             plan.footways.forEach { drawPath(it, colors.outlineVariant, style = walkway) }
             plan.buildings.forEach { b ->
                 val fill = when {
@@ -69,33 +69,14 @@ fun CampusMap(
         // Screen space.
         val entranceColor = colors.onSurfaceVariant
         plan.buildings.forEach { b -> b.entrances.forEach { drawEntrance(state.toScreen(it), entranceColor) } }
-        plan.stops.forEach { drawStop(it, state.toScreen(it.pos), textMeasurer, badgeStyle) }
+        plan.stops.forEach { drawStop(it, state.toScreen(it.pos), textMeasurer, metroStyle) }
         plan.buildings.forEach { b ->
             if (b.info.number.isNotEmpty()) {
-                drawBadge(b.info.number, b.color, state.toScreen(b.label), textMeasurer, badgeStyle, b == selected)
+                val layout = textMeasurer.measure(b.info.number, numberStyle)
+                drawText(layout, topLeft = state.toScreen(b.label) - Offset(layout.size.width / 2f, layout.size.height / 2f))
             }
         }
     }
-}
-
-private fun DrawScope.drawBadge(
-    text: String,
-    color: Color,
-    center: Offset,
-    textMeasurer: TextMeasurer,
-    style: TextStyle,
-    selected: Boolean,
-) {
-    val layout = textMeasurer.measure(text, style)
-    val h = 22.dp.toPx()
-    val w = maxOf(h, layout.size.width + 10.dp.toPx())
-    val topLeft = center - Offset(w / 2f, h / 2f)
-    if (selected) {
-        val ring = 3.dp.toPx()
-        drawRoundRect(Color.White, topLeft - Offset(ring, ring), Size(w + 2 * ring, h + 2 * ring), CornerRadius(ring * 2))
-    }
-    drawRoundRect(color, topLeft, Size(w, h), CornerRadius(3.dp.toPx()))
-    drawText(layout, topLeft = center - Offset(layout.size.width / 2f, layout.size.height / 2f))
 }
 
 private fun DrawScope.drawStop(

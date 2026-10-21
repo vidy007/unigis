@@ -80,6 +80,16 @@ static void testCamera() {
     c.prepareResetRotation();
     c.step(1.f);
     CHECK(near(c.rotation(), 90.f));
+
+    // Cover: home view fills the viewport (31.25 = 1000/32), yet zooming out reaches the whole plan (22.5).
+    Camera::init(s, {0, 0, 32, 20}, 0.f, true);
+    c.onViewportChanged(1000, 500);
+    CHECK(near(c.scale(), 31.25f));
+    c.onGesture({500, 250}, {0, 0}, 0.01f, 0.f);
+    CHECK(near(c.scale(), 22.5f));
+    c.prepareFit();
+    c.step(1.f);
+    CHECK(near(c.scale(), 31.25f, 1e-2f));
 }
 
 static void testCampusMap() {

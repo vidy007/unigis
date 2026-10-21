@@ -11,12 +11,12 @@ import com.unigismap.indoormap.core.CampusColors
 import com.unigismap.indoormap.core.StopKind
 
 /**
- * The campus as on the printed NSTU map: gray footprints with colored number badges, entrances,
- * bus/tram stops and the metro. Mirrors app/.../map/CampusMap.kt. Badges and markers are drawn
+ * The campus as on the printed NSTU map: gray footprints with building numbers, entrances,
+ * bus/tram stops and the metro. Mirrors app/.../map/CampusMap.kt. Numbers and markers are drawn
  * in screen space so they keep their size and stay upright while the map is zoomed and rotated.
  */
 class CampusMapView(context: Context, private val plan: CampusPlan) :
-    MapView(context, plan.bounds, plan.viewRotation) {
+    MapView(context, plan.bounds, plan.viewRotation, cover = true) {
 
     var selected: CampusBuilding? = null
         set(value) { field = value; invalidate() }
@@ -29,12 +29,12 @@ class CampusMapView(context: Context, private val plan: CampusPlan) :
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
-    private val badgeText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val numberText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
-        textSize = 12f * resources.displayMetrics.scaledDensity
+        textSize = 13f * resources.displayMetrics.scaledDensity
         typeface = Typeface.create("sans-serif", Typeface.BOLD)
-        color = CampusColors.ON_BADGE
     }
+    private val metroText = Paint(numberText).apply { color = CampusColors.ON_BADGE }
     private val rect = RectF()
     private val triangle = Path()
 
@@ -49,7 +49,7 @@ class CampusMapView(context: Context, private val plan: CampusPlan) :
         canvas.rotate(rotationDeg)
         canvas.scale(scale, scale)
         val px = 1f / scale  // one screen pixel in meters
-        stroke.strokeWidth = 1.5f * density * px
+        stroke.strokeWidth = density * px
         stroke.color = palette.outlineVariant
         for (fw in plan.footways) canvas.drawPath(fw, stroke)
         fill.style = Paint.Style.FILL
@@ -77,23 +77,9 @@ class CampusMapView(context: Context, private val plan: CampusPlan) :
         for (b in plan.buildings) {
             if (b.info.number.isEmpty()) continue
             val c = toScreen(b.label.x, b.label.y)
-            drawBadge(canvas, b.info.number, b.color, c.x, c.y, b === selected)
+            numberText.color = palette.primary
+            canvas.drawText(b.info.number, c.x, c.y - (numberText.ascent() + numberText.descent()) / 2f, numberText)
         }
-    }
-
-    private fun drawBadge(canvas: Canvas, text: String, color: Int, cx: Float, cy: Float, isSelected: Boolean) {
-        val h = 22f * density
-        val w = maxOf(h, badgeText.measureText(text) + 10f * density)
-        rect.set(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
-        if (isSelected) {
-            val ring = 3f * density
-            fill.color = CampusColors.ON_BADGE
-            canvas.drawRoundRect(RectF(rect.left - ring, rect.top - ring, rect.right + ring, rect.bottom + ring),
-                ring * 2, ring * 2, fill)
-        }
-        fill.color = color
-        canvas.drawRoundRect(rect, 3f * density, 3f * density, fill)
-        canvas.drawText(text, cx, cy - (badgeText.ascent() + badgeText.descent()) / 2f, badgeText)
     }
 
     private fun drawStop(canvas: Canvas, stop: CampusStop) {
@@ -104,7 +90,7 @@ class CampusMapView(context: Context, private val plan: CampusPlan) :
         fill.color = stop.color
         canvas.drawRoundRect(rect, 2f * density, 2f * density, fill)
         if (stop.kind == StopKind.METRO) {
-            canvas.drawText("М", c.x, c.y - (badgeText.ascent() + badgeText.descent()) / 2f, badgeText)
+            canvas.drawText("М", c.x, c.y - (metroText.ascent() + metroText.descent()) / 2f, metroText)
         }
     }
 

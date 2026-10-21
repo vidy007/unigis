@@ -220,12 +220,12 @@ UNIGISMAP_FN(jfloatArray, route)(JNIEnv* env, jobject, jlong handle, jint fb, ji
 
 UNIGISMAP_FN(jint, cameraStateSize)(JNIEnv*, jobject) { return cam::Count; }
 
-/** [rotation] is the home view angle in degrees (0 = north up). */
+/** [rotation] is the home view angle in degrees (0 = north up); [cover] fills the viewport in the home view. */
 UNIGISMAP_FN(void, cameraInit)(JNIEnv* env, jobject, jfloatArray state, jfloat l, jfloat t, jfloat r, jfloat b,
-                               jfloat rotation) {
+                               jfloat rotation, jboolean cover) {
     if (env->GetArrayLength(state) < cam::Count) return;
     float init[cam::Count];
-    Camera::init(init, {l, t, r, b}, rotation);
+    Camera::init(init, {l, t, r, b}, rotation, cover != JNI_FALSE);
     env->SetFloatArrayRegion(state, 0, cam::Count, init);
 }
 

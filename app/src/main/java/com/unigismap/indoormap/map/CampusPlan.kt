@@ -60,7 +60,7 @@ class CampusPlan(
                 viewRotation = map.viewRotation,
                 buildings = buildings,
                 stops = map.stops.map { CampusStop(it.name, it.kind, it.pos.toOffset()) },
-                footways = map.footways.map { it.toPath(close = false) },
+                footways = map.footways.map { it.toSmoothPath() },
                 legend = campus.legend,
                 campus = campus,
             )
@@ -69,6 +69,17 @@ class CampusPlan(
 }
 
 private fun MapPoint.toOffset() = Offset(x, y)
+
+/** Polyline with rounded corners: curves through the vertices, between segment midpoints. */
+private fun List<MapPoint>.toSmoothPath() = Path().apply {
+    if (isEmpty()) return@apply
+    moveTo(first().x, first().y)
+    for (i in 1 until size - 1) {
+        quadraticTo(this@toSmoothPath[i].x, this@toSmoothPath[i].y,
+            (this@toSmoothPath[i].x + this@toSmoothPath[i + 1].x) / 2, (this@toSmoothPath[i].y + this@toSmoothPath[i + 1].y) / 2)
+    }
+    if (size > 1) lineTo(last().x, last().y)
+}
 
 private fun List<MapPoint>.toPath(close: Boolean) = Path().apply {
     forEachIndexed { i, p -> if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y) }

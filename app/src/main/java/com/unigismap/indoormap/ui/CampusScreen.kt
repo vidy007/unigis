@@ -58,7 +58,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CampusScreen(plan: CampusPlan, onOpenFloors: (BuildingInfo) -> Unit) {
-    val mapState = rememberMapState(plan.bounds, plan.viewRotation)
+    val mapState = rememberMapState(plan.bounds, plan.viewRotation, cover = true)
     val scope = rememberCoroutineScope()
     var selected by remember { mutableStateOf<CampusBuilding?>(null) }
 

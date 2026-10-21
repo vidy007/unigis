@@ -2,7 +2,7 @@
 
 namespace unigismap {
 
-void Camera::init(float* state, const Rect& plan, float homeRotation) {
+void Camera::init(float* state, const Rect& plan, float homeRotation, bool cover) {
     std::fill(state, state + cam::Count, 0.f);
     state[cam::Scale] = 1.f;
     state[cam::FitScale] = 1.f;
@@ -12,6 +12,7 @@ void Camera::init(float* state, const Rect& plan, float homeRotation) {
     state[cam::PlanB] = plan.bottom;
     state[cam::HomeRotation] = normalizeDegrees(homeRotation);
     state[cam::Rotation] = state[cam::HomeRotation];
+    state[cam::Cover] = cover ? 1.f : 0.f;
 }
 
 float Camera::computeFitScale(const Rect& bounds, float rotation) const {
@@ -24,6 +25,17 @@ float Camera::computeFitScale(const Rect& bounds, float rotation) const {
     const float bw = bounds.width() * c + bounds.height() * s;
     const float bh = bounds.width() * s + bounds.height() * c;
     return std::min(w / bw, h / bh) * 0.9f;
+}
+
+float Camera::homeScale() const {
+    const float fit = s_[cam::FitScale];
+    const Rect b = plan();
+    if (s_[cam::Cover] == 0.f || b.empty()) return fit;
+    // The viewport seen in the plan's own axes must fit inside the plan.
+    const float rad = homeRotation() * static_cast<float>(M_PI) / 180.f;
+    const float c = std::fabs(std::cos(rad)), s = std::fabs(std::sin(rad));
+    const float w = s_[cam::ViewportW], h = s_[cam::ViewportH];
+    return std::max(fit, std::max((w * c + h * s) / b.width(), (w * s + h * c) / b.height()));
 }
 
 void Camera::setCamera(Vec2 centerWorld, float scale, float rotation) {
@@ -48,7 +60,7 @@ void Camera::onGesture(Vec2 centroid, Vec2 pan, float zoom, float rotationDelta)
     s_[cam::Rotation] = normalizeDegrees(rotation() + rotationDelta);
 }
 
-void Camera::fitToScreen() { setCamera(plan().center(), s_[cam::FitScale], homeRotation()); }
+void Camera::fitToScreen() { setCamera(plan().center(), homeScale(), homeRotation()); }
 
 void Camera::prepare(Vec2 targetCenter, float targetScale, float targetRotation) {
     set(cam::AnimStartX, cam::AnimStartY, toWorld(viewportCenter()));
@@ -68,7 +80,7 @@ void Camera::step(float t) {
               normalizeDegrees(s_[cam::AnimStartRotation] + s_[cam::AnimRotationDelta] * t));
 }
 
-void Camera::prepareFit() { prepare(plan().center(), s_[cam::FitScale], homeRotation()); }
+void Camera::prepareFit() { prepare(plan().center(), homeScale(), homeRotation()); }
 
 void Camera::prepareResetRotation() { prepare(toWorld(viewportCenter()), scale(), homeRotation()); }
 

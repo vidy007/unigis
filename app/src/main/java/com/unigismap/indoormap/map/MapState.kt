@@ -29,10 +29,11 @@ import kotlinx.coroutines.launch
  * (unigismap::Camera); this class owns the packed state array and mirrors scale/rotation/offset
  * into Compose state for recomposition.
  * A world point `w` (meters) maps to the screen as `offset + rotate(w * scale, rotation)`.
- * [homeRotation] is the default view angle: fit and reset-rotation return to it.
+ * [homeRotation] is the default view angle: fit and reset-rotation return to it. With [cover] the
+ * home view fills the screen with the map; zooming out still reaches the whole map.
  */
 @Stable
-class MapState(bounds: Rect, homeRotation: Float = 0f) {
+class MapState(bounds: Rect, homeRotation: Float = 0f, cover: Boolean = false) {
     private val native = FloatArray(NativeCore.cameraStateSize())
     private val point = FloatArray(2)
 
@@ -44,7 +45,7 @@ class MapState(bounds: Rect, homeRotation: Float = 0f) {
         private set
 
     init {
-        with(bounds) { NativeCore.cameraInit(native, left, top, right, bottom, homeRotation) }
+        with(bounds) { NativeCore.cameraInit(native, left, top, right, bottom, homeRotation, cover) }
         sync()
     }
 
@@ -102,8 +103,8 @@ class MapState(bounds: Rect, homeRotation: Float = 0f) {
 }
 
 @Composable
-fun rememberMapState(bounds: Rect, homeRotation: Float = 0f): MapState =
-    remember(bounds, homeRotation) { MapState(bounds, homeRotation) }
+fun rememberMapState(bounds: Rect, homeRotation: Float = 0f, cover: Boolean = false): MapState =
+    remember(bounds, homeRotation, cover) { MapState(bounds, homeRotation, cover) }
 
 /** Pan/pinch/rotate gestures, double-tap zoom and taps reported in world meters. */
 @Composable

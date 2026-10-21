@@ -41,7 +41,7 @@ object NativeCore {
 
     external fun cameraStateSize(): Int
     /** [rotation]: home view angle in degrees, where fit and reset-rotation return (0 = north up). */
-    external fun cameraInit(state: FloatArray, left: Float, top: Float, right: Float, bottom: Float, rotation: Float)
+    external fun cameraInit(state: FloatArray, left: Float, top: Float, right: Float, bottom: Float, rotation: Float, cover: Boolean)
     external fun cameraViewport(state: FloatArray, width: Float, height: Float)
     external fun cameraGesture(
         state: FloatArray, centroidX: Float, centroidY: Float, panX: Float, panY: Float, zoom: Float, rotation: Float,

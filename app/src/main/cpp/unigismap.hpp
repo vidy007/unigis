@@ -466,6 +466,7 @@ enum Field : int {
     AnimTargetX,
     AnimTargetY,
     HomeRotation,  // the "unrotated" view: fit and reset-rotation return to it
+    Cover,         // 1: the home view fills the viewport (no empty margins); zooming out still reaches FitScale
     Count,
 };
 }  // namespace cam
@@ -475,8 +476,11 @@ class Camera {
 public:
     explicit Camera(float* state) : s_(state) {}
 
-    /** [homeRotation] is the default view angle, e.g. to show a campus as on its printed map. */
-    static void init(float* state, const Rect& plan, float homeRotation = 0.f);
+    /**
+     * [homeRotation] is the default view angle, e.g. to show a campus as on its printed map.
+     * With [cover] the home view fills the viewport with the plan instead of fitting it whole.
+     */
+    static void init(float* state, const Rect& plan, float homeRotation = 0.f, bool cover = false);
 
     float scale() const { return s_[cam::Scale]; }
     float rotation() const { return s_[cam::Rotation]; }
@@ -505,12 +509,14 @@ private:
 
     Rect plan() const { return {s_[cam::PlanL], s_[cam::PlanT], s_[cam::PlanR], s_[cam::PlanB]}; }
     Vec2 viewportCenter() const { return get(cam::ViewportW, cam::ViewportH) / 2.f; }
-    float minScale() const { return s_[cam::FitScale] * 0.5f; }
+    float minScale() const { return s_[cam::FitScale] * (s_[cam::Cover] != 0.f ? 1.f : 0.5f); }
     float maxScale() const { return s_[cam::FitScale] * 12.f; }
 
     float homeRotation() const { return s_[cam::HomeRotation]; }
     /** Scale that fits [bounds] into the viewport when shown at [rotation]. */
     float computeFitScale(const Rect& bounds, float rotation) const;
+    /** Scale of the home view: [bounds] covers the whole viewport when shown at the home rotation. */
+    float homeScale() const;
     void setCamera(Vec2 centerWorld, float scale, float rotation);
     void prepare(Vec2 targetCenter, float targetScale, float targetRotation);
 };

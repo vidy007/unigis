@@ -25,9 +25,10 @@ private fun wrapDegrees(d: Float): Float {
  * A map in meters (a floor plan or the campus) that the user can pan, pinch-zoom and
  * two-finger-rotate. Camera math lives in the shared C++ core (unigismap::Camera); this view
  * owns its packed state. A world point `w` maps to the screen as `offset + rotate(w * scale, rotation)`.
- * [homeRotation] is the default view angle: fit and reset-rotation return to it.
+ * [homeRotation] is the default view angle: fit and reset-rotation return to it. With [cover] the
+ * home view fills the screen with the map; zooming out still reaches the whole map.
  */
-abstract class MapView(context: Context, bounds: RectF, homeRotation: Float = 0f) : View(context) {
+abstract class MapView(context: Context, bounds: RectF, homeRotation: Float = 0f, cover: Boolean = false) : View(context) {
 
     var palette: Palette = Palette.Light
         set(value) { field = value; invalidate() }
@@ -35,7 +36,7 @@ abstract class MapView(context: Context, bounds: RectF, homeRotation: Float = 0f
     var onCameraChanged: () -> Unit = {}
 
     private val camera = FloatArray(NativeCore.cameraStateSize()).also {
-        with(bounds) { NativeCore.cameraInit(it, left, top, right, bottom, homeRotation) }
+        with(bounds) { NativeCore.cameraInit(it, left, top, right, bottom, homeRotation, cover) }
     }
     private val point = FloatArray(2)
 
